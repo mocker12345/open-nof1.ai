@@ -25,8 +25,13 @@ model Chat {
 model Trading {
   id String @id @default(uuid())
 
-  symbol    Symbol
-  opeartion Opeartion
+  symbol     Symbol
+  opeartion  Opeartion
+  leverage   Int
+  amount     Int
+  pricing    Int?
+  stopLoss   Int
+  takeProfit Int
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
