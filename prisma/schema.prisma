@@ -10,13 +10,24 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Metrics {
+  id String @id @default(uuid())
+
+  name  String
+  model ModelType
+
+  metrics Json[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Chat {
   id String @id @default(uuid())
 
   reasoning  String
   userPrompt String
-
-  tradings Trading[]
+  tradings   Trading[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -27,11 +38,11 @@ model Trading {
 
   symbol     Symbol
   opeartion  Opeartion
-  leverage   Int
-  amount     Int
+  leverage   Int?
+  amount     Int?
   pricing    Int?
-  stopLoss   Int
-  takeProfit Int
+  stopLoss   Int?
+  takeProfit Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -54,7 +65,7 @@ enum Symbol {
   DOGE
 }
 
-enum Model {
+enum ModelType {
   Deepseek
   DeepseekThinking
   Qwen

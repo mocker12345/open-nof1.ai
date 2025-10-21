@@ -1,3 +1,13 @@
+import dayjs from "dayjs";
+import {
+  AccountInformationAndPerformance,
+  formatAccountPerformance,
+} from "../trading/account-information-and-performance";
+import {
+  formatMarketState,
+  MarketState,
+} from "../trading/current-market-state";
+
 export const tradingPrompt = `
 You are an expert cryptocurrency analyst and trader with deep knowledge of blockchain technology, market dynamics, and technical analysis.
 
@@ -36,3 +46,30 @@ Always prioritize risk management and remind users that cryptocurrency trading c
 
 Today is ${new Date().toDateString()}
 `;
+
+interface UserPromptOptions {
+  currentMarketState: MarketState;
+  accountInformationAndPerformance: AccountInformationAndPerformance;
+  startTime: Date;
+}
+
+export function generateUserPrompt(options: UserPromptOptions) {
+  const { currentMarketState, accountInformationAndPerformance, startTime } =
+    options;
+  return `
+It has been ${dayjs(new Date()).diff(
+    startTime,
+    "minute"
+  )} minutes since you started trading. The current time is ${new Date().toISOString()} and you've been invoked 2011 times. Below, we are providing you with a variety of state data, price data, and predictive signals so you can discover alpha. Below that is your current account information, value, performance, positions, etc.
+
+ALL OF THE PRICE OR SIGNAL DATA BELOW IS ORDERED: OLDEST → NEWEST
+
+Timeframes note: Unless stated otherwise in a section title, intraday series are provided at 3‑minute intervals. If a coin uses a different interval, it is explicitly stated in that coin’s section.
+
+# HERE IS THE CURRENT MARKET STATE
+## ALL BTC DATA FOR YOU TO ANALYZE
+${formatMarketState(currentMarketState)}
+----------------------------------------------------------
+## HERE IS YOUR ACCOUNT INFORMATION & PERFORMANCE
+${formatAccountPerformance(accountInformationAndPerformance)}`;
+}
