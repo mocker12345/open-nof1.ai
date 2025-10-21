@@ -25,6 +25,8 @@ model Metrics {
 model Chat {
   id String @id @default(uuid())
 
+  model      ModelType @default(Deepseek)
+  chat       String    @default("<no chat>")
   reasoning  String
   userPrompt String
   tradings   Trading[]
@@ -47,7 +49,7 @@ model Trading {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  Chat   Chat?   @relation(fields: [chatId], references: [id])
+  Chat   Chat?   @relation(fields: [chatId], references: [id], onDelete: Cascade)
   chatId String?
 }
 

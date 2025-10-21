@@ -1,7 +1,6 @@
 import { run } from "@/lib/ai/run";
 import { NextRequest } from "next/server";
 import jwt from "jsonwebtoken";
-import { getAccountInformationAndPerformance } from "@/lib/trading/account-information-and-performance";
 
 export const GET = async (request: NextRequest) => {
   // Extract token from query parameters
@@ -18,10 +17,7 @@ export const GET = async (request: NextRequest) => {
     return new Response("Invalid token", { status: 401 });
   }
 
-  const accountInformationAndPerformance =
-    await getAccountInformationAndPerformance(
-      Number(process.env.INITIAL_CAPITAL)
-    );
+  await run(Number(process.env.START_MONEY));
 
   return new Response("Process executed successfully");
 };

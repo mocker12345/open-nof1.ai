@@ -43,8 +43,6 @@ export async function getAccountInformationAndPerformance(
   };
 }
 
-console.log(await getAccountInformationAndPerformance(10));
-
 export function formatAccountPerformance(
   accountPerformance: AccountInformationAndPerformance
 ) {

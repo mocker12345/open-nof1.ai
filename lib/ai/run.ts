@@ -73,6 +73,7 @@ export async function run(initialCapital: number) {
     await prisma.chat.create({
       data: {
         reasoning: reasoning || "<no reasoning>",
+        chat: object.chat || "<no chat>",
         userPrompt,
         tradings: {
           createMany: {
@@ -93,6 +94,7 @@ export async function run(initialCapital: number) {
     await prisma.chat.create({
       data: {
         reasoning: reasoning || "<no reasoning>",
+        chat: object.chat || "<no chat>",
         userPrompt,
         tradings: {
           createMany: {
@@ -112,6 +114,7 @@ export async function run(initialCapital: number) {
     await prisma.chat.create({
       data: {
         reasoning: reasoning || "<no reasoning>",
+        chat: object.chat || "<no chat>",
         userPrompt,
         tradings: {
           createMany: {
@@ -131,5 +134,3 @@ export async function run(initialCapital: number) {
     });
   }
 }
-
-intervalTrading();
