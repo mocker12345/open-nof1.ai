@@ -49,7 +49,7 @@ This open-source implementation currently focuses on running the **DeepSeek** tr
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/open-nof1.ai.git
+   git clone https://github.com/snowingfox/open-nof1.ai.git
    cd open-nof1.ai
    ```
 
@@ -65,18 +65,28 @@ This open-source implementation currently focuses on running the **DeepSeek** tr
 
    Fill in your `.env` file:
    ```env
-   # Database
-   DATABASE_URL="postgresql://user:password@localhost:5432/nof1"
+   # Application
+   NEXT_PUBLIC_URL="http://localhost:3000"
 
-   # AI Model
+   # Database
+   DATABASE_URL="postgresql://postgres:password@localhost:5432/nof1"
+
+   # AI Models
    DEEPSEEK_API_KEY="your_deepseek_api_key"
+   OPENROUTER_API_KEY="your_openrouter_api_key"  # Optional: for additional models
+   
+   # Market Research (Optional)
+   EXA_API_KEY="your_exa_api_key"  # For enhanced market analysis
 
    # Trading (Binance)
    BINANCE_API_KEY="your_binance_api_key"
-   BINANCE_SECRET="your_binance_secret"
+   BINANCE_API_SECRET="your_binance_secret"
+   
+   # Trading Configuration
+   START_MONEY=10000  # Initial capital in USDT (e.g., 10000 = $10,000 USDT)
 
    # Cron Job Authentication
-   CRON_SECRET="your_secret_token"
+   CRON_SECRET_KEY="your_secret_token"
    ```
 
 4. **Set up the database**
@@ -100,12 +110,12 @@ This open-source implementation currently focuses on running the **DeepSeek** tr
    Example crontab:
    ```bash
    # Metrics collection (every 20 seconds)
-   * * * * * curl -X POST http://localhost:3000/api/cron/20-seconds-metrics-interval -H "Authorization: Bearer YOUR_CRON_SECRET"
-   * * * * * sleep 20 && curl -X POST http://localhost:3000/api/cron/20-seconds-metrics-interval -H "Authorization: Bearer YOUR_CRON_SECRET"
-   * * * * * sleep 40 && curl -X POST http://localhost:3000/api/cron/20-seconds-metrics-interval -H "Authorization: Bearer YOUR_CRON_SECRET"
+   * * * * * curl -X POST http://localhost:3000/api/cron/20-seconds-metrics-interval -H "Authorization: Bearer YOUR_CRON_SECRET_KEY"
+   * * * * * sleep 20 && curl -X POST http://localhost:3000/api/cron/20-seconds-metrics-interval -H "Authorization: Bearer YOUR_CRON_SECRET_KEY"
+   * * * * * sleep 40 && curl -X POST http://localhost:3000/api/cron/20-seconds-metrics-interval -H "Authorization: Bearer YOUR_CRON_SECRET_KEY"
 
    # Trading execution (every 3 minutes)
-   */3 * * * * curl -X POST http://localhost:3000/api/cron/3-minutes-run-interval -H "Authorization: Bearer YOUR_CRON_SECRET"
+   */3 * * * * curl -X POST http://localhost:3000/api/cron/3-minutes-run-interval -H "Authorization: Bearer YOUR_CRON_SECRET_KEY"
    ```
 
 Open [http://localhost:3000](http://localhost:3000) to view the dashboard.
@@ -150,6 +160,15 @@ open-nof1.ai/
 3. **Execution**: Approved trades are executed via Binance API
 4. **Transparency**: All reasoning, prompts, and decisions are stored in the database
 5. **Visualization**: The dashboard displays real-time performance and trade history
+
+### ⚙️ Configuration
+
+**Starting Capital** (`START_MONEY`)
+- Set your initial trading capital in USDT (Tether stablecoin)
+- Example: `START_MONEY=10000` means you start with $10,000 USDT
+- Recommended for testing: Start with small amounts (e.g., `START_MONEY=30`)
+- The AI will make trading decisions based on this available capital
+- All profits and losses are calculated relative to this starting amount
 
 ## 🤝 AI Models
 
