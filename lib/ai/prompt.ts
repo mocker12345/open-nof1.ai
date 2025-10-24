@@ -51,16 +51,21 @@ interface UserPromptOptions {
   currentMarketState: MarketState;
   accountInformationAndPerformance: AccountInformationAndPerformance;
   startTime: Date;
+  invocationCount?: number;
 }
 
 export function generateUserPrompt(options: UserPromptOptions) {
-  const { currentMarketState, accountInformationAndPerformance, startTime } =
-    options;
+  const {
+    currentMarketState,
+    accountInformationAndPerformance,
+    startTime,
+    invocationCount = 0,
+  } = options;
   return `
 It has been ${dayjs(new Date()).diff(
     startTime,
     "minute"
-  )} minutes since you started trading. The current time is ${new Date().toISOString()} and you've been invoked 2011 times. Below, we are providing you with a variety of state data, price data, and predictive signals so you can discover alpha. Below that is your current account information, value, performance, positions, etc.
+  )} minutes since you started trading. The current time is ${new Date().toISOString()} and you've been invoked ${invocationCount} times. Below, we are providing you with a variety of state data, price data, and predictive signals so you can discover alpha. Below that is your current account information, value, performance, positions, etc.
 
 ALL OF THE PRICE OR SIGNAL DATA BELOW IS ORDERED: OLDEST → NEWEST
 

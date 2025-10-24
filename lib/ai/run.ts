@@ -14,10 +14,14 @@ export async function run(initialCapital: number) {
   const currentMarketState = await getCurrentMarketState("BTC/USDT");
   const accountInformationAndPerformance =
     await getAccountInformationAndPerformance(initialCapital);
+  // Count previous Chat entries to provide an invocation counter in the prompt
+  const invocationCount = await prisma.chat.count();
+
   const userPrompt = generateUserPrompt({
     currentMarketState,
     accountInformationAndPerformance,
     startTime: new Date(),
+    invocationCount,
   });
 
   const { object, reasoning } = await generateObject({
