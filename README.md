@@ -81,6 +81,7 @@ This open-source implementation currently focuses on running the **DeepSeek** tr
    # Trading (Binance)
    BINANCE_API_KEY="your_binance_api_key"
    BINANCE_API_SECRET="your_binance_secret"
+   BINANCE_USE_SANDBOX="true"  # Set to "false" for live trading
    
    # Trading Configuration
    START_MONEY=10000  # Initial capital in USDT (e.g., 10000 = $10,000 USDT)

@@ -7,3 +7,5 @@ export const binance = new ccxt.binance({
     defaultType: "future",
   },
 });
+
+binance.setSandboxMode(process.env.BINANCE_USE_SANDBOX === "true");
