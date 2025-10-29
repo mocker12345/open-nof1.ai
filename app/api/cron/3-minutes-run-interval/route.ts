@@ -12,7 +12,12 @@ export const GET = async (request: NextRequest) => {
   }
 
   try {
-    jwt.verify(token, process.env.CRON_SECRET_KEY || "");
+    // 临时方案：直接比较字符串token
+    if (token !== process.env.CRON_SECRET_KEY) {
+      return new Response("Invalid token", { status: 401 });
+    }
+    // JWT方案（暂时注释）
+    // jwt.verify(token, process.env.CRON_SECRET_KEY || "");
   } catch (error) {
     return new Response("Invalid token", { status: 401 });
   }

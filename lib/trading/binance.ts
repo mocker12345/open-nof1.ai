@@ -1,4 +1,5 @@
 import ccxt from "ccxt";
+import { tr } from "zod/v4/locales";
 
 export const binance = new ccxt.binance({
   apiKey: process.env.BINANCE_API_KEY,
@@ -8,4 +9,7 @@ export const binance = new ccxt.binance({
   },
 });
 
-binance.setSandboxMode(process.env.BINANCE_USE_SANDBOX === "true");
+binance.enableDemoTrading(true)
+
+
+// Note: setSandboxMode is deprecated for futures, using demo trading instead

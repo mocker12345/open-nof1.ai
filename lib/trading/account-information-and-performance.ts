@@ -22,8 +22,9 @@ export async function getAccountInformationAndPerformance(
     return acc + (position.contracts || 0);
   }, 0);
   const currentCashValue = await binance.fetchBalance({ type: "future" });
-  const totalCashValue = currentCashValue.USDT.total || 0;
-  const availableCash = currentCashValue.USDT.free || 0;
+
+  const totalCashValue = currentCashValue.USDT?.total || currentCashValue.total?.USDT || 0;
+  const availableCash = currentCashValue.USDT?.free || currentCashValue.free?.USDT || 0;
   const currentTotalReturn = (totalCashValue - initialCapital) / initialCapital;
   const sharpeRatio =
     currentTotalReturn /

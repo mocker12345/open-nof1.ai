@@ -34,13 +34,24 @@ export const GET = async (request: NextRequest) => {
   const url = new URL(request.url);
   const token = url.searchParams.get("token");
 
+  // 临时调试信息
+  console.log("🔑 CRON_SECRET_KEY:", process.env.CRON_SECRET_KEY ? "SET" : "NOT SET");
+  console.log("🔑 Token received:", token ? "YES" : "NO");
+
   if (!token) {
     return new Response("Token is required", { status: 400 });
   }
 
   try {
-    jwt.verify(token, process.env.CRON_SECRET_KEY || "");
-  } catch {
+    // 临时方案：直接比较字符串token
+    if (token !== process.env.CRON_SECRET_KEY) {
+      console.log("❌ Simple token verification failed");
+      return new Response("Invalid token", { status: 401 });
+    }
+    // JWT方案（暂时注释）
+    // jwt.verify(token, process.env.CRON_SECRET_KEY || "");
+  } catch (error) {
+    console.log("❌ JWT verification failed:", error.message);
     return new Response("Invalid token", { status: 401 });
   }
 

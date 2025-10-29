@@ -15,7 +15,7 @@ import remarkGfm from "remark-gfm";
 interface Trading {
   id: string;
   symbol: string;
-  opeartion: "Buy" | "Sell" | "Hold";
+  opeartion: "BUY_TO_ENTER" | "SELL_TO_ENTER" | "HOLD" | "CLOSE";
   leverage?: number | null;
   amount?: number | null;
   pricing?: number | null;
@@ -37,10 +37,34 @@ interface Chat {
 
 type TabType = "completed-trades" | "model-chat" | "positions";
 
+interface Position {
+  symbol: string;
+  side: string;
+  contracts: number;
+  entryPrice: number;
+  markPrice: number;
+  unrealizedPnl: number;
+  percentage: number;
+  leverage?: number;
+  liquidationPrice?: number;
+  timestamp: number;
+  dbTrade?: {
+    leverage?: number;
+    stopLoss?: number;
+    takeProfit?: number;
+    confidence?: number;
+    justification?: string;
+    model?: string;
+    createdAt: string;
+  };
+}
+
 export function ModelsView() {
   const [activeTab, setActiveTab] = useState<TabType>("model-chat");
   const [chats, setChats] = useState<Chat[]>([]);
+  const [positions, setPositions] = useState<Position[]>([]);
   const [loading, setLoading] = useState(true);
+  const [positionsLoading, setPositionsLoading] = useState(true);
   const [expandedChatId, setExpandedChatId] = useState<string | null>(null);
 
   const fetchChats = useCallback(async () => {
@@ -57,27 +81,54 @@ export function ModelsView() {
     }
   }, []);
 
+  const fetchPositions = useCallback(async () => {
+    try {
+      const response = await fetch("/api/positions");
+      if (!response.ok) return;
+
+      const data = await response.json();
+      setPositions(data.data?.positions || []);
+      setPositionsLoading(false);
+    } catch (err) {
+      console.error("Error fetching positions:", err);
+      setPositionsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     fetchChats();
-    const interval = setInterval(fetchChats, 30000);
-    return () => clearInterval(interval);
-  }, [fetchChats]);
+    fetchPositions();
 
-  // 只获取 Buy 和 Sell 操作的交易
+    const chatInterval = setInterval(fetchChats, 30000);
+    const positionsInterval = setInterval(fetchPositions, 10000);
+
+    return () => {
+      clearInterval(chatInterval);
+      clearInterval(positionsInterval);
+    };
+  }, [fetchChats, fetchPositions]);
+
+  // 获取所有交易操作（买入和卖出）
   const completedTrades = chats.flatMap((chat) =>
     chat.tradings
-      .filter((t) => t.opeartion === "Buy" || t.opeartion === "Sell")
+      .filter((t) =>
+        t.opeartion === "BUY_TO_ENTER" ||
+        t.opeartion === "SELL_TO_ENTER" ||
+        t.opeartion === "CLOSE"
+      )
       .map((t) => ({ ...t, chatId: chat.id, model: chat.model }))
   );
 
   const renderOperationIcon = (operation: string) => {
     switch (operation) {
-      case "Buy":
+      case "BUY_TO_ENTER":
         return <TrendingUp className="h-4 w-4 text-green-500" />;
-      case "Sell":
+      case "SELL_TO_ENTER":
         return <TrendingDown className="h-4 w-4 text-red-500" />;
-      case "Hold":
+      case "HOLD":
         return <Minus className="h-4 w-4 text-yellow-500" />;
+      case "CLOSE":
+        return <TrendingDown className="h-4 w-4 text-orange-500" />;
       default:
         return null;
     }
@@ -132,7 +183,9 @@ export function ModelsView() {
                 {trade.pricing && (
                   <div className="space-y-1">
                     <div className="text-xs text-muted-foreground font-medium">
-                      {trade.opeartion === "Buy" ? "Entry Price" : "Exit Price"}
+                      {trade.opeartion === "BUY_TO_ENTER"
+                        ? "Entry Price"
+                        : "Exit Price"}
                     </div>
                     <div className="font-mono font-bold text-base">
                       $
@@ -222,6 +275,155 @@ export function ModelsView() {
                   </span>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  };
+
+  const renderPositions = () => {
+    if (positionsLoading) {
+      return <div className="text-center py-8 text-sm">Loading positions...</div>;
+    }
+
+    if (positions.length === 0) {
+      return (
+        <div className="text-center py-8 text-muted-foreground text-sm">
+          No open positions
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-3">
+        <div className="text-xs text-muted-foreground mb-2">
+          {positions.length} open position{positions.length > 1 ? "s" : ""}
+        </div>
+        {positions.map((position, idx) => (
+          <Card key={`${position.symbol}-${idx}`} className="overflow-hidden">
+            <CardContent className="p-4">
+              {/* Header with symbol and PnL */}
+              <div className="flex items-center justify-between mb-3 pb-3 border-b">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${
+                    position.side === 'long' ? 'bg-green-500' : 'bg-red-500'
+                  }`} />
+                  <span className="font-bold text-base">
+                    {position.symbol}
+                  </span>
+                  <span className="text-xs text-muted-foreground px-2 py-1 bg-muted rounded">
+                    {position.side === 'long' ? 'LONG' : 'SHORT'}
+                  </span>
+                  {position.leverage && (
+                    <span className="text-xs text-purple-600 font-medium">
+                      {position.leverage}x
+                    </span>
+                  )}
+                </div>
+                <div className="text-right">
+                  <div className={`font-bold text-base ${
+                    position.unrealizedPnl >= 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {position.unrealizedPnl >= 0 ? '+' : ''}${Math.abs(position.unrealizedPnl).toFixed(2)}
+                  </div>
+                  <div className={`text-xs ${
+                    position.percentage >= 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {position.percentage >= 0 ? '+' : ''}{position.percentage.toFixed(2)}%
+                  </div>
+                </div>
+              </div>
+
+              {/* Position details */}
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                {/* Entry Price */}
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground font-medium">
+                    Entry Price
+                  </div>
+                  <div className="font-mono font-semibold">
+                    ${position.entryPrice.toLocaleString()}
+                  </div>
+                </div>
+
+                {/* Mark Price */}
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground font-medium">
+                    Mark Price
+                  </div>
+                  <div className="font-mono font-semibold">
+                    ${position.markPrice.toLocaleString()}
+                  </div>
+                </div>
+
+                {/* Size */}
+                <div className="space-y-1">
+                  <div className="text-xs text-muted-foreground font-medium">
+                    Size
+                  </div>
+                  <div className="font-mono font-semibold">
+                    {Math.abs(position.contracts)} {position.symbol}
+                  </div>
+                </div>
+
+                {/* Liquidation Price */}
+                {position.liquidationPrice && (
+                  <div className="space-y-1">
+                    <div className="text-xs text-muted-foreground font-medium">
+                      Liquidation Price
+                    </div>
+                    <div className="font-mono font-semibold text-red-500">
+                      ${position.liquidationPrice.toLocaleString()}
+                    </div>
+                  </div>
+                )}
+
+                {/* Stop Loss from DB */}
+                {position.dbTrade?.stopLoss && (
+                  <div className="space-y-1">
+                    <div className="text-xs text-muted-foreground font-medium">
+                      Stop Loss
+                    </div>
+                    <div className="font-mono font-semibold text-red-500">
+                      ${position.dbTrade.stopLoss.toLocaleString()}
+                    </div>
+                  </div>
+                )}
+
+                {/* Take Profit from DB */}
+                {position.dbTrade?.takeProfit && (
+                  <div className="space-y-1">
+                    <div className="text-xs text-muted-foreground font-medium">
+                      Take Profit
+                    </div>
+                    <div className="font-mono font-semibold text-green-500">
+                      ${position.dbTrade.takeProfit.toLocaleString()}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* AI decision info */}
+              {position.dbTrade && (
+                <div className="mt-3 pt-3 border-t">
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <div>
+                      Model: <span className="font-medium text-foreground">{position.dbTrade.model}</span>
+                    </div>
+                    {position.dbTrade.confidence && (
+                      <div>
+                        Confidence: <span className="font-medium text-foreground">{(position.dbTrade.confidence * 100).toFixed(1)}%</span>
+                      </div>
+                    )}
+                    {position.dbTrade.justification && (
+                      <div className="mt-2 p-2 bg-muted/50 rounded text-xs">
+                        {position.dbTrade.justification.slice(0, 100)}{position.dbTrade.justification.length > 100 ? '...' : ''}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}
@@ -326,9 +528,9 @@ export function ModelsView() {
                           <div
                             key={idx}
                             className={`rounded-lg p-3 border-l-4 ${
-                              decision.opeartion === "Buy"
+                              decision.opeartion === "BUY_TO_ENTER"
                                 ? "bg-green-50 dark:bg-green-950/20 border-green-500"
-                                : decision.opeartion === "Sell"
+                                : decision.opeartion === "SELL_TO_ENTER"
                                 ? "bg-red-50 dark:bg-red-950/20 border-red-500"
                                 : "bg-yellow-50 dark:bg-yellow-950/20 border-yellow-500"
                             }`}
@@ -349,9 +551,9 @@ export function ModelsView() {
                               {decision.pricing && (
                                 <div className="flex justify-between items-center">
                                   <span className="text-muted-foreground">
-                                    {decision.opeartion === "Buy"
+                                    {decision.opeartion === "BUY_TO_ENTER"
                                       ? "Entry Price:"
-                                      : decision.opeartion === "Sell"
+                                      : decision.opeartion === "SELL_TO_ENTER"
                                       ? "Exit Price:"
                                       : "Current Price:"}
                                   </span>
@@ -492,11 +694,7 @@ export function ModelsView() {
         <div className="flex-1 overflow-y-auto min-h-0 -mx-4 px-4">
           {activeTab === "model-chat" && renderModelChat()}
           {activeTab === "completed-trades" && renderCompletedTrades()}
-          {activeTab === "positions" && (
-            <div className="text-center py-8 text-muted-foreground text-sm">
-              Positions view coming soon...
-            </div>
-          )}
+          {activeTab === "positions" && renderPositions()}
         </div>
       </CardContent>
     </Card>

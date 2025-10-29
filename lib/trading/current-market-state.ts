@@ -100,10 +100,10 @@ export async function getCurrentMarketState(
     // Normalize symbol format for Binance
     const normalizedSymbol = symbol.includes("/") ? symbol : `${symbol}/USDT`;
 
-    // Fetch 1-minute OHLCV data (last 100 candles for intraday analysis)
-    const ohlcv1m = await binance.fetchOHLCV(
+    // Fetch 3-minute OHLCV data (last 100 candles for intraday analysis)
+    const ohlcv3m = await binance.fetchOHLCV(
       normalizedSymbol,
-      "1m",
+      "3m",
       undefined,
       100
     );
@@ -116,8 +116,8 @@ export async function getCurrentMarketState(
       100
     );
 
-    // Extract price data from 1-minute candles
-    const closes1m = ohlcv1m.map((candle) => Number(candle[4])); // Close prices
+    // Extract price data from 3-minute candles
+    const closes3m = ohlcv3m.map((candle) => Number(candle[4])); // Close prices
 
     // Extract price data from 4-hour candles
     const closes4h = ohlcv4h.map((candle) => Number(candle[4]));
@@ -125,11 +125,11 @@ export async function getCurrentMarketState(
     const lows4h = ohlcv4h.map((candle) => Number(candle[3]));
     const volumes4h = ohlcv4h.map((candle) => Number(candle[5]));
 
-    // Calculate intraday indicators (1-minute timeframe)
-    const ema20_1m = calculateEMA(closes1m, 20);
-    const macd_1m = calculateMACD(closes1m);
-    const rsi7_1m = calculateRSI(closes1m, 7);
-    const rsi14_1m = calculateRSI(closes1m, 14);
+    // Calculate intraday indicators (3-minute timeframe)
+    const ema20_3m = calculateEMA(closes3m, 20);
+    const macd_3m = calculateMACD(closes3m);
+    const rsi7_3m = calculateRSI(closes3m, 7);
+    const rsi14_3m = calculateRSI(closes3m, 14);
 
     // Calculate longer-term indicators (4-hour timeframe)
     const ema20_4h = calculateEMA(closes4h, 20);
@@ -140,21 +140,21 @@ export async function getCurrentMarketState(
     const rsi14_4h = calculateRSI(closes4h, 14);
 
     // Get last 10 values for intraday series
-    const last10MidPrices = closes1m.slice(-10);
-    const last10EMA20 = ema20_1m.slice(-10).map((v) => Number(v) || 0);
-    const last10MACD = macd_1m.slice(-10).map((v) => Number(v) || 0);
-    const last10RSI7 = rsi7_1m.slice(-10).map((v) => Number(v) || 0);
-    const last10RSI14 = rsi14_1m.slice(-10).map((v) => Number(v) || 0);
+    const last10MidPrices = closes3m.slice(-10);
+    const last10EMA20 = ema20_3m.slice(-10).map((v) => Number(v) || 0);
+    const last10MACD = macd_3m.slice(-10).map((v) => Number(v) || 0);
+    const last10RSI7 = rsi7_3m.slice(-10).map((v) => Number(v) || 0);
+    const last10RSI14 = rsi14_3m.slice(-10).map((v) => Number(v) || 0);
 
     // Get last 10 MACD and RSI values for 4-hour timeframe
     const last10MACD4h = macd_4h.slice(-10).map((v) => Number(v) || 0);
     const last10RSI14_4h = rsi14_4h.slice(-10).map((v) => Number(v) || 0);
 
     // Current values (latest)
-    const current_price = Number(closes1m[closes1m.length - 1]) || 0;
-    const current_ema20 = Number(ema20_1m[ema20_1m.length - 1]) || 0;
-    const current_macd = Number(macd_1m[macd_1m.length - 1]) || 0;
-    const current_rsi = Number(rsi7_1m[rsi7_1m.length - 1]) || 0;
+    const current_price = Number(closes3m[closes3m.length - 1]) || 0;
+    const current_ema20 = Number(ema20_3m[ema20_3m.length - 1]) || 0;
+    const current_macd = Number(macd_3m[macd_3m.length - 1]) || 0;
+    const current_rsi = Number(rsi7_3m[rsi7_3m.length - 1]) || 0;
 
     // Fetch open interest and funding rate for perpetual futures
     const openInterestData = { latest: 0, average: 0 };
@@ -219,6 +219,84 @@ export async function getCurrentMarketState(
 /**
  * Format market state as a human-readable string
  */
+/**
+ * Fetch current market state for multiple coin symbols
+ * @param symbols - Array of trading pair symbols (e.g., ['BTC/USDT', 'ETH/USDT'])
+ * @returns Object with market states for all symbols
+ */
+export async function getAllMarketStates(
+  symbols: string[] = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "DOGE/USDT", "XRP/USDT"]
+): Promise<{ [symbol: string]: MarketState }> {
+  const marketStates: { [symbol: string]: MarketState } = {};
+
+  // Fetch market states for all symbols in parallel
+  const promises = symbols.map(async (symbol) => {
+    try {
+      const state = await getCurrentMarketState(symbol);
+      return { symbol, state };
+    } catch (error) {
+      console.error(`Error fetching market state for ${symbol}:`, error);
+      return { symbol, state: null };
+    }
+  });
+
+  const results = await Promise.all(promises);
+
+  results.forEach(({ symbol, state }) => {
+    if (state) {
+      marketStates[symbol] = state;
+    }
+  });
+
+  return marketStates;
+}
+
+/**
+ * Format market state for a specific coin symbol
+ */
+export function formatCoinMarketState(state: MarketState, coinName: string): string {
+  return `
+### ALL ${coinName} DATA
+
+**Current Snapshot:**
+- current_price = ${state.current_price.toFixed(2)}
+- current_ema20 = ${state.current_ema20.toFixed(3)}
+- current_macd = ${state.current_macd.toFixed(3)}
+- current_rsi (7 period) = ${state.current_rsi.toFixed(3)}
+
+**Perpetual Futures Metrics:**
+- Open Interest: Latest: ${state.open_interest.latest.toFixed(2)} | Average: ${state.open_interest.average.toFixed(2)}
+- Funding Rate: ${state.funding_rate.toExponential(2)}
+
+**Intraday Series (3-minute intervals, oldest → latest):**
+
+Mid prices: [${state.intraday.mid_prices.map((v) => v.toFixed(2)).join(", ")}]
+
+EMA indicators (20-period): [${state.intraday.ema_20.map((v) => v.toFixed(3)).join(", ")}]
+
+MACD indicators: [${state.intraday.macd.map((v) => v.toFixed(3)).join(", ")}]
+
+RSI indicators (7-Period): [${state.intraday.rsi_7.map((v) => v.toFixed(3)).join(", ")}]
+
+RSI indicators (14-Period): [${state.intraday.rsi_14.map((v) => v.toFixed(3)).join(", ")}]
+
+**Longer-term Context (4-hour timeframe):**
+
+20-Period EMA: ${state.longer_term.ema_20.toFixed(3)} vs. 50-Period EMA: ${state.longer_term.ema_50.toFixed(3)}
+
+3-Period ATR: ${state.longer_term.atr_3.toFixed(3)} vs. 14-Period ATR: ${state.longer_term.atr_14.toFixed(3)}
+
+Current Volume: ${state.longer_term.current_volume.toFixed(3)} vs. Average Volume: ${state.longer_term.average_volume.toFixed(3)}
+
+MACD indicators (4h): [${state.longer_term.macd.map((v) => v.toFixed(3)).join(", ")}]
+
+RSI indicators (14-Period, 4h): [${state.longer_term.rsi_14.map((v) => v.toFixed(3)).join(", ")}]
+`.trim();
+}
+
+/**
+ * Format market state as a human-readable string (legacy format)
+ */
 export function formatMarketState(state: MarketState): string {
   return `
 Current Market State:
@@ -238,7 +316,7 @@ Open Interest: Latest: ${state.open_interest.latest.toFixed(
 
 Funding Rate: ${state.funding_rate.toExponential(2)}
 
-Intraday series (by minute, oldest → latest):
+Intraday series (by 3-minute intervals, oldest → latest):
 
 Mid prices: [${state.intraday.mid_prices.map((v) => v.toFixed(1)).join(", ")}]
 
