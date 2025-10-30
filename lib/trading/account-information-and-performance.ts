@@ -1,5 +1,6 @@
 import { Position } from "ccxt";
 import { binance } from "./binance";
+import { prisma } from "./prisma";
 
 export interface AccountInformationAndPerformance {
   currentPositionsValue: number;
@@ -14,24 +15,81 @@ export interface AccountInformationAndPerformance {
 export async function getAccountInformationAndPerformance(
   initialCapital: number
 ): Promise<AccountInformationAndPerformance> {
-  const positions = await binance.fetchPositions(["BTC/USDT"]);
-  const currentPositionsValue = positions.reduce((acc, position) => {
+  // Get all supported trading pairs
+  const supportedSymbols = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "DOGE/USDT", "XRP/USDT"];
+
+  // Fetch positions for all supported symbols
+  const positions = await binance.fetchPositions(supportedSymbols);
+
+  // Filter for active positions (with non-zero size)
+  const activePositions = positions.filter(pos =>
+    pos.contracts && Number(pos.contracts) !== 0 &&
+    pos.side && pos.side !== 'both'
+  );
+
+  // Get recent trades from database to enrich position data
+  const recentTrades = await prisma.trading.findMany({
+    where: {
+      opeartion: {
+        in: ['BUY_TO_ENTER', 'SELL_TO_ENTER']
+      }
+    },
+    orderBy: {
+      createdAt: 'desc'
+    },
+    take: 20
+  });
+
+  // Enrich positions with database metadata
+  const enrichedPositions = activePositions.map((pos: any) => {
+    // Find matching trade from database
+    const matchingTrade = recentTrades.find((trade: any) =>
+      trade.symbol === pos.symbol.replace('/USDT', '')
+    );
+
+    // Return position with both Binance data and database metadata
+    return {
+      ...pos,
+      // Add database fields that enhanced-prompt.ts expects
+      quantity: pos.contracts,
+      currentPrice: pos.markPrice,
+      profitTarget: matchingTrade?.takeProfit || 0,
+      stopLoss: matchingTrade?.stopLoss || 0,
+      invalidationCondition: matchingTrade?.invalidationCondition || 'None',
+      confidence: matchingTrade?.confidence || 0,
+      riskUsd: matchingTrade?.riskUsd || 0,
+      notionalUsd: pos.notional || 0,
+    };
+  });
+
+  const currentPositionsValue = enrichedPositions.reduce((acc, position) => {
     return acc + (position.initialMargin || 0) + (position.unrealizedPnl || 0);
   }, 0);
-  const contractValue = positions.reduce((acc, position) => {
+
+  const contractValue = enrichedPositions.reduce((acc, position) => {
     return acc + (position.contracts || 0);
   }, 0);
+
   const currentCashValue = await binance.fetchBalance({ type: "future" });
 
-  const totalCashValue = currentCashValue.USDT?.total || currentCashValue.total?.USDT || 0;
-  const availableCash = currentCashValue.USDT?.free || currentCashValue.free?.USDT || 0;
+  // Handle both balance object structures (direct USDT property or nested in total/free)
+  const totalCashValue = (currentCashValue as any).USDT?.total ||
+                         (currentCashValue as any).total?.USDT ||
+                         currentCashValue.total || 0;
+  const availableCash = (currentCashValue as any).USDT?.free ||
+                        (currentCashValue as any).free?.USDT ||
+                        currentCashValue.free || 0;
   const currentTotalReturn = (totalCashValue - initialCapital) / initialCapital;
-  const sharpeRatio =
-    currentTotalReturn /
-    (positions.reduce((acc, position) => {
-      return acc + (position.unrealizedPnl || 0);
-    }, 0) /
-      initialCapital);
+
+  const totalUnrealizedPnl = enrichedPositions.reduce((acc, position) => {
+    return acc + (position.unrealizedPnl || 0);
+  }, 0);
+
+  // Calculate Sharpe ratio safely
+  let sharpeRatio = 0;
+  if (totalUnrealizedPnl !== 0 && initialCapital > 0) {
+    sharpeRatio = currentTotalReturn / (totalUnrealizedPnl / initialCapital);
+  }
 
   return {
     currentPositionsValue,
@@ -39,7 +97,7 @@ export async function getAccountInformationAndPerformance(
     totalCashValue,
     availableCash,
     currentTotalReturn,
-    positions,
+    positions: enrichedPositions, // Return enriched positions
     sharpeRatio,
   };
 }
