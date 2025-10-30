@@ -16,10 +16,10 @@ export async function GET(request: NextRequest) {
     const invocationCount = await prisma.chat.count();
 
     // Create a modified user prompt that forces a buy decision
-    const forceBuyPrompt = generateEnhancedUserPrompt({
+    const forceBuyPrompt = await generateEnhancedUserPrompt({
       allMarketStates,
       accountInformationAndPerformance,
-      startTime: new Date(),
+      // No startTime provided - will use first trade time automatically
       invocationCount,
     }) + `
 

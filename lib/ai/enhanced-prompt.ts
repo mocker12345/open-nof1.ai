@@ -1,3 +1,5 @@
+import { getMinutesElapsedSinceFirstTrade } from "../trading/first-trade-time";
+
 // Enhanced System Prompt for cryptocurrency trading
 export const enhancedSystemPrompt = `
 # ROLE & IDENTITY
@@ -59,8 +61,13 @@ You have exactly FOUR possible actions per decision cycle:
 
 Calculate position size using this formula:
 
-Position Size (USD) = Available Cash × Leverage × Allocation %
+Position Size (USD) = Available Cash x Allocation % Leverage
 Position Size (Coins) = Position Size (USD) / Current Price
+
+Available Cash = Unused margin balance in your account.
+Account Value = Total equity including unrealized PnL, used for risk percentage calculations (e.g., 1–3% rule).
+Allocation % = Fraction of Available Cash allocated to this position (range 0–1).
+
 
 ## Sizing Considerations
 
@@ -71,7 +78,9 @@ Position Size (Coins) = Position Size (USD) / Current Price
    - High conviction (0.7-1.0): Use 8-20x leverage
 3. **Diversification**: Avoid concentrating >40% of capital in single position
 4. **Fee Impact**: On positions <$500, fees will materially erode profits
-5. **Liquidation Risk**: Ensure liquidation price is >15% away from entry
+5. **Liquidation Risk**: 
+Ensure that the estimated liquidation price is at least 15% away from the entry price.
+If the precise liquidation level cannot be computed, approximate this by limiting leverage to around 6–8× to maintain sufficient margin safety.
 
 ---
 
@@ -84,7 +93,7 @@ For EVERY trade decision, you MUST specify:
    - Based on technical resistance levels, Fibonacci extensions, or volatility bands
 
 2. **stop_loss** (float): Exact price level to cut losses
-   - Should limit loss to 1-3% of account value per trade
+   - Ensure that risk_usd ≤ Account Value × 0.01–0.03, based on the corrected risk_usd formula.
    - Placed beyond recent support/resistance to avoid premature stops
 
 3. **invalidation_condition** (string): Specific market signal that voids your thesis
@@ -98,7 +107,7 @@ For EVERY trade decision, you MUST specify:
    - 0.8-1.0: Very high confidence (use cautiously, beware overconfidence)
 
 5. **risk_usd** (float): Dollar amount at risk (distance from entry to stop loss)
-   - Calculate as: |Entry Price - Stop Loss| × Position Size × Leverage
+   - Calculate as: |Entry Price - Stop Loss| × Position Size
 
 ---
 
@@ -267,7 +276,7 @@ Now, analyze the market data provided below and make your trading decision.
 interface EnhancedUserPromptOptions {
   allMarketStates: { [symbol: string]: MarketState };
   accountInformationAndPerformance: AccountPerformance;
-  startTime: Date;
+  startTime?: Date; // Optional now - will use first trade time if not provided
   invocationCount?: number;
 }
 
@@ -319,7 +328,7 @@ interface AccountPerformance {
   }>;
 }
 
-export function generateEnhancedUserPrompt(options: EnhancedUserPromptOptions) {
+export async function generateEnhancedUserPrompt(options: EnhancedUserPromptOptions) {
   const {
     allMarketStates,
     accountInformationAndPerformance,
@@ -327,7 +336,13 @@ export function generateEnhancedUserPrompt(options: EnhancedUserPromptOptions) {
     invocationCount = 0,
   } = options;
 
-  const minutesElapsed = Math.floor(Date.now() - startTime.getTime()) / (1000 * 60);
+  // Get minutes elapsed since first trade (if startTime provided, use it; otherwise use first trade time)
+  let minutesElapsed: number;
+  if (startTime) {
+    minutesElapsed = Math.floor((Date.now() - startTime.getTime()) / (1000 * 60));
+  } else {
+    minutesElapsed = await getMinutesElapsedSinceFirstTrade();
+  }
 
   let marketDataSection = `
 It has been ${minutesElapsed} minutes since you started trading. The current time is ${new Date().toISOString()} and you've been invoked ${invocationCount} times. Below, we are providing you with a variety of state data, price data, and predictive signals so you can discover alpha. Below that is your current account information, value, performance, positions, etc.
@@ -362,7 +377,7 @@ It has been ${minutesElapsed} minutes since you started trading. The current tim
 - current_rsi (7 period) = ${marketState.current_rsi.toFixed(3)}
 
 **Perpetual Futures Metrics:**
-- Open Interest: Latest: ${marketState.open_interest.latest.toFixed(2)} | Average: ${marketState.open_interest.average.toFixed(2)}
+- Open Interest: Latest = ${marketState.open_interest.latest.toFixed(2)} | Average = ${marketState.open_interest.average.toFixed(2)}
 - Funding Rate: ${marketState.funding_rate.toExponential(2)}
 
 **Intraday Series (3-minute intervals, oldest → latest):**
@@ -405,13 +420,6 @@ RSI indicators (14-Period, 4h): [${marketState.longer_term.rsi_14.map((v: number
 **Account Status:**
 - Available Cash: $${(accountInformationAndPerformance.availableCash || 0).toFixed(2)}
 - **Current Account Value:** $${(accountInformationAndPerformance.totalCashValue || 0).toFixed(2)}
-
-**🚨 CRITICAL POSITION SIZING CALCULATION:**
-You MUST calculate your position size using this exact formula:
-
-1. Required Margin = (Quantity × Current Price × Leverage)
-2. Required Margin must be ≤ Available Cash
-3. Maximum Quantity = Available Cash ÷ (Current Price × Leverage)
 
 **WARNING: Always verify your calculation respects the Available Cash limit!**
 

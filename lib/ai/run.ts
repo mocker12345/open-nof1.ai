@@ -20,10 +20,10 @@ export async function run(initialCapital: number) {
   // Count previous Chat entries to provide an invocation counter in the prompt
   const invocationCount = await prisma.chat.count();
 
-  const userPrompt = generateEnhancedUserPrompt({
+  const userPrompt = await generateEnhancedUserPrompt({
     allMarketStates,
     accountInformationAndPerformance,
-    startTime: new Date(),
+    // No startTime provided - will use first trade time automatically
     invocationCount,
   });
 

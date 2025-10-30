@@ -14,10 +14,10 @@ export async function GET(request: NextRequest) {
     const accountInformationAndPerformance = await getAccountInformationAndPerformance(Number(process.env.START_MONEY));
     const invocationCount = await prisma.chat.count();
 
-    const userPrompt = generateEnhancedUserPrompt({
+    const userPrompt = await generateEnhancedUserPrompt({
       allMarketStates,
       accountInformationAndPerformance,
-      startTime: new Date(),
+      // No startTime provided - will use first trade time automatically
       invocationCount,
     });
 
