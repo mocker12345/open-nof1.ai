@@ -1,6 +1,6 @@
 import { Position } from "ccxt";
 import { binance } from "./binance";
-import { prisma } from "./prisma";
+import { prisma } from "../prisma";
 
 export interface AccountInformationAndPerformance {
   currentPositionsValue: number;

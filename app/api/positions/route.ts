@@ -30,15 +30,40 @@ export async function GET(request: NextRequest) {
       take: 20
     });
 
+    console.log(`🔍 Found ${recentTrades.length} recent trades in database`);
+    if (recentTrades.length > 0) {
+      console.log('🔍 First trade debug:', {
+        symbol: recentTrades[0].symbol,
+        stopLoss: recentTrades[0].stopLoss,
+        takeProfit: recentTrades[0].takeProfit,
+        riskUsd: recentTrades[0].riskUsd,
+        invalidationCondition: recentTrades[0].invalidationCondition,
+        confidence: recentTrades[0].confidence
+      });
+    }
+
     // Combine exchange data with database data
     const enrichedPositions = activePositions.map(pos => {
       // Find matching trade from database
+      // Handle complex symbol formats like BTC/USDT:USDT -> BTC
+      const cleanSymbol = pos.symbol.replace(/\/.*$/, '');
       const matchingTrade = recentTrades.find(trade =>
-        trade.symbol === pos.symbol.replace('/USDT', '')
+        trade.symbol === cleanSymbol
       );
 
+      console.log(`🔍 Matching position ${cleanSymbol} with trade:`, {
+        originalSymbol: pos.symbol,
+        cleanSymbol: cleanSymbol,
+        found: !!matchingTrade,
+        tradeSymbol: matchingTrade?.symbol,
+        hasStopLoss: !!matchingTrade?.stopLoss,
+        hasTakeProfit: !!matchingTrade?.takeProfit,
+        hasRiskUsd: !!matchingTrade?.riskUsd,
+        hasInvalidationCondition: !!matchingTrade?.invalidationCondition
+      });
+
       return {
-        symbol: pos.symbol.replace('/USDT', ''),
+        symbol: cleanSymbol, // Use the clean symbol for consistency
         side: pos.side,
         contracts: pos.contracts,
         entryPrice: pos.entryPrice,
@@ -55,6 +80,9 @@ export async function GET(request: NextRequest) {
           takeProfit: matchingTrade.takeProfit,
           confidence: matchingTrade.confidence,
           justification: matchingTrade.justification,
+          riskUsd: matchingTrade.riskUsd,
+          invalidationCondition: matchingTrade.invalidationCondition,
+          model: 'Deepseek', // Default model since not stored in trading table
           createdAt: matchingTrade.createdAt
         } : null
       };

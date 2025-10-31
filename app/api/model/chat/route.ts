@@ -21,6 +21,21 @@ export const GET = async (request: NextRequest) => {
     },
   });
 
+  console.log('🔍 Chat API debug:');
+  console.log(`- Found ${chat.length} chats`);
+
+  chat.forEach((c, index) => {
+    console.log(`Chat ${index + 1}: ${c.id}, ${c.tradings.length} trades`);
+    c.tradings.forEach((trade, tIndex) => {
+      console.log(`  Trade ${tIndex + 1}: ${trade.symbol}, ${trade.opeartion}`);
+      console.log(`    - stopLoss: ${trade.stopLoss}`);
+      console.log(`    - takeProfit: ${trade.takeProfit}`);
+      console.log(`    - riskUsd: ${trade.riskUsd}`);
+      console.log(`    - invalidationCondition: ${trade.invalidationCondition}`);
+      console.log(`    - confidence: ${trade.confidence}`);
+    });
+  });
+
   return NextResponse.json({
     data: chat,
   });

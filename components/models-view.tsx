@@ -21,6 +21,10 @@ interface Trading {
   pricing?: number | null;
   stopLoss?: number | null;
   takeProfit?: number | null;
+  confidence?: number | null;
+  riskUsd?: number | null;
+  invalidationCondition?: string | null;
+  justification?: string | null;
   createdAt: string;
 }
 
@@ -54,6 +58,8 @@ interface Position {
     takeProfit?: number;
     confidence?: number;
     justification?: string;
+    riskUsd?: number;
+    invalidationCondition?: string;
     model?: string;
     createdAt: string;
   };
@@ -73,6 +79,29 @@ export function ModelsView() {
       if (!response.ok) return;
 
       const data = await response.json();
+      console.log('🔍 Chats data received:', data.data?.length || 0, 'chats');
+
+      // Debug first chat with trades
+      if (data.data && data.data.length > 0) {
+        const firstChatWithTrades = data.data.find((chat: any) => chat.tradings && chat.tradings.length > 0);
+        if (firstChatWithTrades) {
+          console.log('🔍 First chat with trades debug:', {
+            chatId: firstChatWithTrades.id,
+            tradesCount: firstChatWithTrades.tradings.length,
+            firstTrade: firstChatWithTrades.tradings[0] ? {
+              symbol: firstChatWithTrades.tradings[0].symbol,
+              opeartion: firstChatWithTrades.tradings[0].opeartion,
+              stopLoss: firstChatWithTrades.tradings[0].stopLoss,
+              takeProfit: firstChatWithTrades.tradings[0].takeProfit,
+              riskUsd: firstChatWithTrades.tradings[0].riskUsd,
+              invalidationCondition: firstChatWithTrades.tradings[0].invalidationCondition,
+              confidence: firstChatWithTrades.tradings[0].confidence,
+              justification: firstChatWithTrades.tradings[0].justification
+            } : null
+          });
+        }
+      }
+
       setChats(data.data || []);
       setLoading(false);
     } catch (err) {
@@ -87,6 +116,20 @@ export function ModelsView() {
       if (!response.ok) return;
 
       const data = await response.json();
+      console.log('🔍 Positions data received:', data.data?.positions?.length || 0, 'positions');
+
+      // Debug first position data
+      if (data.data?.positions && data.data.positions.length > 0) {
+        console.log('🔍 First position debug:', {
+          symbol: data.data.positions[0].symbol,
+          dbTrade: data.data.positions[0].dbTrade,
+          hasStopLoss: !!data.data.positions[0].dbTrade?.stopLoss,
+          hasTakeProfit: !!data.data.positions[0].dbTrade?.takeProfit,
+          hasRiskUsd: !!data.data.positions[0].dbTrade?.riskUsd,
+          hasInvalidationCondition: !!data.data.positions[0].dbTrade?.invalidationCondition
+        });
+      }
+
       setPositions(data.data?.positions || []);
       setPositionsLoading(false);
     } catch (err) {
@@ -264,6 +307,54 @@ export function ModelsView() {
                     </div>
                   </div>
                 )}
+
+                {/* Risk Amount */}
+                {trade.riskUsd && (
+                  <div className="space-y-1">
+                    <div className="text-xs text-muted-foreground font-medium">
+                      Risk Amount
+                    </div>
+                    <div className="font-mono font-semibold text-orange-500">
+                      ${trade.riskUsd.toLocaleString()}
+                    </div>
+                  </div>
+                )}
+
+                {/* Confidence */}
+                {trade.confidence && (
+                  <div className="space-y-1">
+                    <div className="text-xs text-muted-foreground font-medium">
+                      Confidence
+                    </div>
+                    <div className="font-semibold text-purple-600">
+                      {(trade.confidence * 100).toFixed(1)}%
+                    </div>
+                  </div>
+                )}
+
+                {/* Invalidation Condition */}
+                {trade.invalidationCondition && trade.invalidationCondition !== 'None' && (
+                  <div className="space-y-1 col-span-2">
+                    <div className="text-xs text-muted-foreground font-medium">
+                      Exit Condition
+                    </div>
+                    <div className="text-xs text-orange-600 bg-orange-50 p-2 rounded">
+                      {trade.invalidationCondition}
+                    </div>
+                  </div>
+                )}
+
+                {/* Justification */}
+                {trade.justification && (
+                  <div className="space-y-1 col-span-2">
+                    <div className="text-xs text-muted-foreground font-medium">
+                      AI Reasoning
+                    </div>
+                    <div className="text-xs text-muted-foreground bg-blue-50 p-2 rounded">
+                      {trade.justification}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Model info at bottom */}
@@ -404,6 +495,50 @@ export function ModelsView() {
                 )}
               </div>
 
+              {/* Exit Plan */}
+              {(position.dbTrade?.stopLoss || position.dbTrade?.takeProfit || position.dbTrade?.invalidationCondition) && (
+                <div className="mt-3 pt-3 border-t">
+                  <div className="text-xs text-muted-foreground font-medium mb-2">Exit Plan</div>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {/* Risk Amount */}
+                    {position.dbTrade?.riskUsd && (
+                      <div className="space-y-1">
+                        <div className="text-xs text-muted-foreground font-medium">
+                          Risk Amount
+                        </div>
+                        <div className="font-mono font-semibold text-orange-500">
+                          ${position.dbTrade.riskUsd.toLocaleString()}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Confidence */}
+                    {position.dbTrade?.confidence && (
+                      <div className="space-y-1">
+                        <div className="text-xs text-muted-foreground font-medium">
+                          Confidence
+                        </div>
+                        <div className="font-semibold text-purple-600">
+                          {(position.dbTrade.confidence * 100).toFixed(1)}%
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Invalidation Condition */}
+                    {position.dbTrade?.invalidationCondition && position.dbTrade.invalidationCondition !== 'None' && (
+                      <div className="space-y-1 col-span-2">
+                        <div className="text-xs text-muted-foreground font-medium">
+                          Exit Condition
+                        </div>
+                        <div className="text-xs text-orange-600 bg-orange-50 p-2 rounded">
+                          {position.dbTrade.invalidationCondition}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* AI decision info */}
               {position.dbTrade && (
                 <div className="mt-3 pt-3 border-t">
@@ -411,14 +546,10 @@ export function ModelsView() {
                     <div>
                       Model: <span className="font-medium text-foreground">{position.dbTrade.model}</span>
                     </div>
-                    {position.dbTrade.confidence && (
-                      <div>
-                        Confidence: <span className="font-medium text-foreground">{(position.dbTrade.confidence * 100).toFixed(1)}%</span>
-                      </div>
-                    )}
                     {position.dbTrade.justification && (
-                      <div className="mt-2 p-2 bg-muted/50 rounded text-xs">
-                        {position.dbTrade.justification.slice(0, 100)}{position.dbTrade.justification.length > 100 ? '...' : ''}
+                      <div className="mt-2 p-2 bg-blue-50 rounded text-xs">
+                        <div className="font-medium text-foreground mb-1">AI Reasoning:</div>
+                        {position.dbTrade.justification}
                       </div>
                     )}
                   </div>
