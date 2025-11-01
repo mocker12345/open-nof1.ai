@@ -97,35 +97,97 @@ export async function executeSellOrder(params: SellOrderParams) {
  */
 export async function closePosition(symbol: SymbolType) {
   try {
-    // Get current balance for the symbol
-    const balance = await binance.fetchBalance();
-    const symbolBalance = balance[symbol] || { free: 0, used: 0 };
+    // Try both symbol formats for futures
+    const binanceSymbol = `${symbol}/USDT`;
+    const futuresSymbol = `${symbol}/USDT:USDT`;
 
-    const totalBalance = (symbolBalance.free || 0) + (symbolBalance.used || 0);
+    // First, get current positions to determine position side
+    let position: any = null;
+    try {
+      const positions = await binance.fetchPositions();
+      console.log(`📊 Checking positions for ${symbol}...`);
+      console.log(`Available positions:`, positions.map(p => `${p.symbol} (${p.contracts})`));
 
-    if (totalBalance <= 0) {
+      // Try to find position with either symbol format
+      position = positions.find((p: any) =>
+        (p.symbol === binanceSymbol || p.symbol === futuresSymbol) &&
+        parseFloat(p.contracts) !== 0
+      );
+
+      console.log(`Found position:`, position ? `${position.symbol} (${position.contracts})` : 'None');
+    } catch (error) {
+      console.error("Failed to fetch positions:", error);
+    }
+
+    if (!position) {
+      // If no position found in futures positions, try balance-based closing (for spot)
+      const balance = await binance.fetchBalance();
+      const symbolBalance = balance[symbol] || { free: 0, used: 0 };
+      const totalBalance = (symbolBalance.free || 0) + (symbolBalance.used || 0);
+
+      if (totalBalance <= 0) {
+        return {
+          success: false,
+          error: "No position found for this symbol",
+          symbol,
+          closedPosition: false,
+        };
+      }
+
+      // Close spot position with market sell order
+      const order = await binance.createMarketSellOrder(binanceSymbol, totalBalance);
+
       return {
-        success: false,
-        error: "No balance found for this symbol",
-        symbol,
+        success: true,
+        orderId: order.id.toString(),
+        symbol: binanceSymbol,
+        side: "SELL",
+        quantity: totalBalance,
+        price: order.price || 0,
+        executedQuantity: order.filled || 0,
+        status: order.status,
+        type: "MARKET",
+        closedPosition: true,
       };
     }
 
-    // Close position with market order
-    const binanceSymbol = `${symbol}/USDT`;
-    const order = await binance.createMarketSellOrder(binanceSymbol, totalBalance);
+    // For futures positions, determine the correct closing side
+    const contracts = parseFloat(position.contracts);
+    const isLongPosition = contracts > 0;
+    const closeQuantity = Math.abs(contracts);
+
+    console.log(`📊 Closing ${symbol} position:`, {
+      side: isLongPosition ? 'LONG' : 'SHORT',
+      contracts: contracts,
+      closeQuantity: closeQuantity,
+      closingSide: isLongPosition ? 'SELL' : 'BUY'
+    });
+
+    // Execute closing order using the correct symbol format
+    const orderSymbol = position.symbol; // Use the actual symbol format from the position
+    let order;
+    if (isLongPosition) {
+      // Close long position with SELL order
+      console.log(`📈 Closing LONG position: SELL ${closeQuantity} ${orderSymbol}`);
+      order = await binance.createMarketSellOrder(orderSymbol, closeQuantity);
+    } else {
+      // Close short position with BUY order
+      console.log(`📉 Closing SHORT position: BUY ${closeQuantity} ${orderSymbol}`);
+      order = await binance.createMarketBuyOrder(orderSymbol, closeQuantity);
+    }
 
     return {
       success: true,
       orderId: order.id.toString(),
-      symbol: binanceSymbol,
-      side: "SELL",
-      quantity: totalBalance,
+      symbol: orderSymbol,
+      side: isLongPosition ? "SELL" : "BUY",
+      quantity: closeQuantity,
       price: order.price || 0,
       executedQuantity: order.filled || 0,
       status: order.status,
       type: "MARKET",
       closedPosition: true,
+      originalSide: isLongPosition ? "LONG" : "SHORT",
     };
   } catch (error) {
     console.error("Close position failed:", error);

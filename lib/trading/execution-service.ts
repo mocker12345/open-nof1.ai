@@ -58,15 +58,7 @@ export class TradingExecutionService {
       warnings: [],
     };
 
-    console.log(`🔧 === EXECUTION SERVICE DEBUG ===`);
-    console.log(`📅 Timestamp: ${new Date().toISOString()}`);
-    console.log(`🎯 Decision Signal: ${decision.signal}`);
-    console.log(`🪙 Target Coin: ${decision.coin}`);
-    console.log(`📈 Quantity: ${decision.quantity}`);
-    console.log(`⚡ Leverage: ${decision.leverage}x`);
-    console.log(`💰 Available Capital: $${availableCapital.toFixed(2)}`);
-    console.log(`🛡️ Sandbox Mode: ${this.isSandboxMode}`);
-    console.log(`🎯 Confidence: ${(decision.confidence * 100).toFixed(1)}%`);
+    console.log(`🎯 ${decision.coin} ${decision.signal} - Qty: ${decision.quantity}, Lev: ${decision.leverage}x, Conf: ${(decision.confidence * 100).toFixed(1)}%`);
 
     try {
       // 🚨 RISK CONTROL DISABLED - 跳过交易暂停检查
