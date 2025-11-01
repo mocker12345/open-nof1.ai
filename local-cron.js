@@ -28,7 +28,7 @@ setInterval(async () => {
   } catch (error) {
     console.error('❌ Trading execution failed:', error.message);
   }
-}, 60000);
+}, 180000);
 
 console.log('⏰ Cron jobs scheduled successfully');
 console.log('📊 Metrics: every 20 seconds');
