@@ -215,6 +215,29 @@ Use Sharpe Ratio to calibrate your behavior:
 - %K crossing below %D = Bearish momentum signal
 - Divergence with price = Strong reversal signal
 
+**ADX (Average Directional Index)**: Trend strength indicator
+- **ADX < 20**: No clear trend, market ranging → Avoid trend strategies
+- **ADX 20-25**: Weak trend forming → Cautious entry, requires additional confirmation
+- **ADX 25-40**: Moderate trend → Ideal for trend following strategies
+- **ADX 40-60**: Strong trend → High conviction trading opportunities
+- **ADX > 60**: Very strong trend → Watch for overextension risk
+
+**Trend Direction Analysis**:
+- +DI > -DI and ADX > 20 = Uptrend confirmed
+- -DI > +DI and ADX > 20 = Downtrend confirmed
+- +DI crossing -DI = Potential trend reversal signal
+
+**Dynamic Analysis**:
+- Rising ADX = Trend strengthening (momentum confirmation)
+- Falling ADX = Trend weakening (prepare for exit)
+- ADX high + price continues = Divergence warning (trend may end)
+
+**Crypto Market Considerations**:
+- Use ADX > 25 for trend confirmation (higher threshold due to volatility)
+- ADX > 45 indicates strong trends in crypto markets
+- Short-term (3-min): ADX changes rapidly, combine with other indicators
+- Long-term (4h): ADX more reliable but slower to react
+
 ## Data Ordering (CRITICAL)
 
 ⚠️ **ALL PRICE AND INDICATOR DATA IS ORDERED: OLDEST → NEWEST**
@@ -317,6 +340,9 @@ interface MarketState {
   current_bollinger_lower: number;
   current_stoch_k: number;
   current_stoch_d: number;
+  current_adx: number;
+  current_pdi: number;  // +DI (Positive Directional Indicator)
+  current_ndi: number;  // -DI (Negative Directional Indicator)
   open_interest: { latest: number; average: number };
   funding_rate: number;
   intraday: {
@@ -330,6 +356,9 @@ interface MarketState {
     bollinger_middle: number[];
     stoch_k: number[];
     stoch_d: number[];
+    adx: number[];
+    pdi: number[];  // +DI series
+    ndi: number[];  // -DI series
   };
   longer_term: {
     ema_20: number;
@@ -345,6 +374,9 @@ interface MarketState {
     bollinger_middle_4h: number[];
     stoch_k_4h: number[];
     stoch_d_4h: number[];
+    adx_4h: number[];
+    pdi_4h: number[];  // +DI series (4h)
+    ndi_4h: number[];  // -DI series (4h)
   };
 }
 
@@ -421,6 +453,9 @@ It has been ${minutesElapsed} minutes since you started trading. The current tim
 - current_bollinger_lower = ${marketState.current_bollinger_lower.toFixed(3)}
 - current_stoch_k = ${marketState.current_stoch_k.toFixed(3)}
 - current_stoch_d = ${marketState.current_stoch_d.toFixed(3)}
+- current_adx = ${marketState.current_adx.toFixed(3)}
+- current_pdi (+DI) = ${marketState.current_pdi.toFixed(3)}
+- current_ndi (-DI) = ${marketState.current_ndi.toFixed(3)}
 
 **Perpetual Futures Metrics:**
 - Open Interest: Latest = ${marketState.open_interest.latest.toFixed(2)} | Average = ${marketState.open_interest.average.toFixed(2)}
@@ -448,6 +483,10 @@ Stochastic Oscillator (%K): [${marketState.intraday.stoch_k.map((v: number) => v
 
 Stochastic Oscillator (%D): [${marketState.intraday.stoch_d.map((v: number) => v.toFixed(3)).join(", ")}]
 
+ADX indicators: [${marketState.intraday.adx.map((v: number) => v.toFixed(3)).join(", ")}]
++DI indicators: [${marketState.intraday.pdi.map((v: number) => v.toFixed(3)).join(", ")}]
+-DI indicators: [${marketState.intraday.ndi.map((v: number) => v.toFixed(3)).join(", ")}]
+
 **Longer-term Context (4-hour timeframe):**
 
 20-Period EMA: ${marketState.longer_term.ema_20.toFixed(3)} vs. 50-Period EMA: ${marketState.longer_term.ema_50.toFixed(3)}
@@ -469,6 +508,10 @@ Bollinger Bands 4h (Lower): [${marketState.longer_term.bollinger_lower_4h.map((v
 Stochastic Oscillator 4h (%K): [${marketState.longer_term.stoch_k_4h.map((v: number) => v.toFixed(3)).join(", ")}]
 
 Stochastic Oscillator 4h (%D): [${marketState.longer_term.stoch_d_4h.map((v: number) => v.toFixed(3)).join(", ")}]
+
+ADX indicators (4h): [${marketState.longer_term.adx_4h.map((v: number) => v.toFixed(3)).join(", ")}]
++DI indicators (4h): [${marketState.longer_term.pdi_4h.map((v: number) => v.toFixed(3)).join(", ")}]
+-DI indicators (4h): [${marketState.longer_term.ndi_4h.map((v: number) => v.toFixed(3)).join(", ")}]
 
 ---
 `;

@@ -1,4 +1,4 @@
-import { EMA, MACD, RSI, ATR, BollingerBands, Stochastic } from "technicalindicators";
+import { EMA, MACD, RSI, ATR, BollingerBands, Stochastic, ADX } from "technicalindicators";
 import { binance } from "./binance";
 
 export interface MarketState {
@@ -11,6 +11,9 @@ export interface MarketState {
   current_bollinger_lower: number;
   current_stoch_k: number;
   current_stoch_d: number;
+  current_adx: number;
+  current_pdi: number;  // +DI (Positive Directional Indicator)
+  current_ndi: number;  // -DI (Negative Directional Indicator)
 
   // Open Interest
   open_interest: {
@@ -33,6 +36,9 @@ export interface MarketState {
     bollinger_middle: number[];
     stoch_k: number[];
     stoch_d: number[];
+    adx: number[];
+    pdi: number[];  // +DI series
+    ndi: number[];  // -DI series
   };
 
   // Longer-term context (4-hour timeframe)
@@ -50,6 +56,9 @@ export interface MarketState {
     bollinger_middle_4h: number[];
     stoch_k_4h: number[];
     stoch_d_4h: number[];
+    adx_4h: number[];
+    pdi_4h: number[];  // +DI series (4h)
+    ndi_4h: number[];  // -DI series (4h)
   };
 }
 
@@ -100,6 +109,23 @@ function calculateATR(
 ): number[] {
   const atrValues = ATR.calculate({ high, low, close, period });
   return atrValues;
+}
+
+/**
+ * Calculate ADX (Average Directional Index) with DI lines
+ */
+function calculateADX(
+  high: number[],
+  low: number[],
+  close: number[],
+  period: number = 14
+): { adx: number[]; pdi: number[]; ndi: number[] } {
+  const adxValues = ADX.calculate({ high, low, close, period });
+  return {
+    adx: adxValues.map(v => v.adx || 0),
+    pdi: adxValues.map(v => v.pdi || 0),  // +DI (Positive DI)
+    ndi: adxValues.map(v => v.mdi || 0)   // -DI (Negative DI, called mdi in library)
+  };
 }
 
 /**
@@ -161,6 +187,14 @@ export async function getCurrentMarketState(
       signalPeriod: 3
     });
 
+    // Calculate ADX (3-minute timeframe)
+    const adx3mResult = calculateADX(
+      ohlcv3m.map(candle => Number(candle[2])),
+      ohlcv3m.map(candle => Number(candle[3])),
+      closes3m,
+      14
+    );
+
     // Calculate longer-term indicators (4-hour timeframe)
     const ema20_4h = calculateEMA(closes4h, 20);
     const ema50_4h = calculateEMA(closes4h, 50);
@@ -184,6 +218,9 @@ export async function getCurrentMarketState(
       period: 14,
       signalPeriod: 3
     });
+
+    // Calculate ADX (4-hour timeframe)
+    const adx4hResult = calculateADX(highs4h, lows4h, closes4h, 14);
 
     // Get last 10 values for intraday series
     const last10MidPrices = closes3m.slice(-10);
@@ -245,6 +282,9 @@ export async function getCurrentMarketState(
     const last10BollingerMiddle = bollingerBands3m.slice(-10).map(b => Number(b?.middle) || 0);
     const last10StochK = stochastic3m.slice(-10).map(s => Number(s?.k) || 0);
     const last10StochD = stochastic3m.slice(-10).map(s => Number(s?.d) || 0);
+    const last10ADX = adx3mResult.adx.slice(-10).map(v => Number(v) || 0);
+    const last10PDI = adx3mResult.pdi.slice(-10).map(v => Number(v) || 0);
+    const last10NDI = adx3mResult.ndi.slice(-10).map(v => Number(v) || 0);
 
     // Prepare 4h indicators
     const last10BollingerUpper4h = bollingerBands4h.slice(-10).map(b => Number(b?.upper) || 0);
@@ -252,6 +292,9 @@ export async function getCurrentMarketState(
     const last10BollingerMiddle4h = bollingerBands4h.slice(-10).map(b => Number(b?.middle) || 0);
     const last10StochK4h = stochastic4h.slice(-10).map(s => Number(s?.k) || 0);
     const last10StochD4h = stochastic4h.slice(-10).map(s => Number(s?.d) || 0);
+    const last10ADX4h = adx4hResult.adx.slice(-10).map(v => Number(v) || 0);
+    const last10PDI4h = adx4hResult.pdi.slice(-10).map(v => Number(v) || 0);
+    const last10NDI4h = adx4hResult.ndi.slice(-10).map(v => Number(v) || 0);
 
     return {
       current_price,
@@ -262,6 +305,9 @@ export async function getCurrentMarketState(
       current_bollinger_lower,
       current_stoch_k,
       current_stoch_d,
+      current_adx: Number(adx3mResult.adx[adx3mResult.adx.length - 1]) || 0,
+      current_pdi: Number(adx3mResult.pdi[adx3mResult.pdi.length - 1]) || 0,
+      current_ndi: Number(adx3mResult.ndi[adx3mResult.ndi.length - 1]) || 0,
       open_interest: openInterestData,
       funding_rate: fundingRate,
       intraday: {
@@ -275,6 +321,9 @@ export async function getCurrentMarketState(
         bollinger_middle: last10BollingerMiddle,
         stoch_k: last10StochK,
         stoch_d: last10StochD,
+        adx: last10ADX,
+        pdi: last10PDI,
+        ndi: last10NDI,
       },
       longer_term: {
         ema_20: Number(ema20_4h[ema20_4h.length - 1]) || 0,
@@ -290,6 +339,9 @@ export async function getCurrentMarketState(
         bollinger_middle_4h: last10BollingerMiddle4h,
         stoch_k_4h: last10StochK4h,
         stoch_d_4h: last10StochD4h,
+        adx_4h: last10ADX4h,
+        pdi_4h: last10PDI4h,
+        ndi_4h: last10NDI4h,
       },
     };
   } catch (error) {
@@ -345,6 +397,9 @@ export function formatCoinMarketState(state: MarketState, coinName: string): str
 - current_ema20 = ${state.current_ema20.toFixed(3)}
 - current_macd = ${state.current_macd.toFixed(3)}
 - current_rsi (7 period) = ${state.current_rsi.toFixed(3)}
+- current_adx = ${state.current_adx.toFixed(3)}
+- current_pdi (+DI) = ${state.current_pdi.toFixed(3)}
+- current_ndi (-DI) = ${state.current_ndi.toFixed(3)}
 
 **Perpetual Futures Metrics:**
 - Open Interest: Latest: ${state.open_interest.latest.toFixed(2)} | Average: ${state.open_interest.average.toFixed(2)}
@@ -361,6 +416,12 @@ MACD indicators: [${state.intraday.macd.map((v) => v.toFixed(3)).join(", ")}]
 RSI indicators (7-Period): [${state.intraday.rsi_7.map((v) => v.toFixed(3)).join(", ")}]
 
 RSI indicators (14-Period): [${state.intraday.rsi_14.map((v) => v.toFixed(3)).join(", ")}]
+
+ADX indicators: [${state.intraday.adx.map((v) => v.toFixed(3)).join(", ")}]
+
++DI indicators: [${state.intraday.pdi.map((v) => v.toFixed(3)).join(", ")}]
+
+-DI indicators: [${state.intraday.ndi.map((v) => v.toFixed(3)).join(", ")}]
 
 **Longer-term Context (4-hour timeframe):**
 

@@ -50,10 +50,24 @@ export default function Home() {
 
       const data: MetricsResponse = await response.json();
       if (data.success && data.data) {
-        setMetricsData(data.data.metrics || []);
-        setTotalCount(data.data.totalCount || 0);
-        setLastUpdate(new Date().toLocaleTimeString());
-        setLoading(false);
+        const newMetrics = data.data.metrics || [];
+
+        // 数据验证：确保数据格式正确
+        if (Array.isArray(newMetrics) && newMetrics.length > 0) {
+          // 检查数据完整性
+          const validMetrics = newMetrics.filter(metric =>
+            metric &&
+            typeof metric.totalCashValue === 'number' &&
+            metric.createdAt
+          );
+
+          setMetricsData(validMetrics);
+          setTotalCount(data.data.totalCount || 0);
+          setLastUpdate(new Date().toLocaleTimeString());
+          setLoading(false);
+
+          console.log(`📈 Updated metrics: ${validMetrics.length} points`);
+        }
       }
     } catch (err) {
       console.error("Error fetching metrics:", err);

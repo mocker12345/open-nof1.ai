@@ -7,22 +7,49 @@ import { MetricData } from "@/lib/types/metrics";
 const MAX_DATA_POINTS = 50;
 
 /**
- * 从数组中均匀采样指定数量的元素
+ * 智能采样数据，优先保留最新数据点和关键时间点
  * @param data - 原始数据数组
  * @param sampleSize - 需要采样的数量
- * @returns 均匀分布的采样数据
+ * @returns 采样后的数据，保持时间顺序
  */
-function uniformSample<T>(data: T[], sampleSize: number): T[] {
+function smartSample<T>(data: T[], sampleSize: number): T[] {
   if (data.length <= sampleSize) {
     return data;
   }
 
   const result: T[] = [];
-  const step = (data.length - 1) / (sampleSize - 1);
+  const dataLength = data.length;
 
-  for (let i = 0; i < sampleSize; i++) {
-    const index = Math.round(i * step);
-    result.push(data[index]);
+  // 总是保留最新的数据点
+  result.push(data[dataLength - 1]);
+
+  if (sampleSize === 1) {
+    return result;
+  }
+
+  // 保留最早的数据点
+  result.unshift(data[0]);
+
+  if (sampleSize === 2) {
+    return result;
+  }
+
+  // 计算中间需要采样的点数
+  const remainingSlots = sampleSize - 2;
+  const middleData = data.slice(1, -1);
+
+  if (middleData.length <= remainingSlots) {
+    // 如果中间数据点足够少，全部保留
+    result.splice(1, 0, ...middleData);
+  } else {
+    // 均匀采样中间部分
+    const step = middleData.length / remainingSlots;
+    for (let i = 0; i < remainingSlots; i++) {
+      const index = Math.floor(i * step);
+      if (index < middleData.length) {
+        result.splice(1 + i, 0, middleData[index]);
+      }
+    }
   }
 
   return result;
@@ -52,20 +79,32 @@ export const GET = async () => {
     }[];
 
     const metricsData = databaseMetrics
-      .map((item) => {
+      .map((item, index) => {
+        const metricData = item.accountInformationAndPerformance as MetricData;
         return {
-          ...item.accountInformationAndPerformance,
-          createdAt: item?.createdAt || new Date().toISOString(),
+          ...metricData,
+          createdAt: item.createdAt || new Date().toISOString(),
+          // 添加原始索引用于排序验证
+          originalIndex: index,
         };
       })
-      .filter((item) => (item as unknown as MetricData).availableCash > 0);
+      .filter((item) => item.availableCash > 0)
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()); // 确保时间顺序
 
-    // 均匀采样数据，最多返回 MAX_DATA_POINTS 条
-    const sampledMetrics = uniformSample(metricsData, MAX_DATA_POINTS);
+    // 使用智能采样，优先保留最新数据点
+    const sampledMetrics = smartSample(metricsData, MAX_DATA_POINTS);
 
-    console.log(
-      `📊 Total metrics: ${metricsData.length}, Sampled: ${sampledMetrics.length}`
-    );
+    // 添加调试信息
+    if (sampledMetrics.length > 0) {
+      const oldestPoint = sampledMetrics[0];
+      const newestPoint = sampledMetrics[sampledMetrics.length - 1];
+      console.log(
+        `📊 Metrics: ${metricsData.length} → ${sampledMetrics.length} | ` +
+        `Time range: ${new Date(oldestPoint.createdAt).toLocaleTimeString()} - ${new Date(newestPoint.createdAt).toLocaleTimeString()}`
+      );
+    } else {
+      console.log(`📊 No valid metrics data found`);
+    }
 
     return NextResponse.json({
       data: {
