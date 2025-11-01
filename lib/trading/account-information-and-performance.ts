@@ -42,17 +42,30 @@ export async function getAccountInformationAndPerformance(
 
   // Enrich positions with database metadata
   const enrichedPositions = activePositions.map((pos: any) => {
+    // Clean symbol format (handle BTC/USDT:USDT -> BTC)
+    const cleanSymbol = pos.symbol.replace(/\/.*$/, '');
+
     // Find matching trade from database
     const matchingTrade = recentTrades.find((trade: any) =>
-      trade.symbol === pos.symbol.replace('/USDT', '')
+      trade.symbol === cleanSymbol
     );
+
+    console.log(`🔍 Enriching position ${cleanSymbol}:`, {
+      originalSymbol: pos.symbol,
+      cleanSymbol: cleanSymbol,
+      foundMatch: !!matchingTrade,
+      hasExitPlan: !!(matchingTrade?.stopLoss || matchingTrade?.takeProfit)
+    });
 
     // Return position with both Binance data and database metadata
     return {
       ...pos,
+      symbol: cleanSymbol, // Use clean symbol for consistency
       // Add database fields that enhanced-prompt.ts expects
       quantity: pos.contracts,
-      currentPrice: pos.markPrice,
+      currentPrice: Number(pos.markPrice?.toFixed(2)) || 0,
+      entryPrice: Number(pos.entryPrice?.toFixed(2)) || 0,
+      unrealizedPnl: Number(pos.unrealizedPnl?.toFixed(2)) || 0,
       profitTarget: matchingTrade?.takeProfit || 0,
       stopLoss: matchingTrade?.stopLoss || 0,
       invalidationCondition: matchingTrade?.invalidationCondition || 'None',

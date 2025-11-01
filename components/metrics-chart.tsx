@@ -167,7 +167,16 @@ export function MetricsChart({
                 tickMargin={6}
                 width={70}
                 tick={{ fontSize: 11 }}
-                tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+                domain={['dataMin - 100', 'dataMax + 100']}
+                tickFormatter={(value) => {
+                  if (value >= 1000000) {
+                    return `$${(value / 1000000).toFixed(1)}M`;
+                  } else if (value >= 1000) {
+                    return `$${(value / 1000).toFixed(0)}k`;
+                  } else {
+                    return `$${value.toFixed(0)}`;
+                  }
+                }}
               />
               <ChartTooltip
                 content={({ active, payload }) => {
@@ -224,9 +233,16 @@ export function MetricsChart({
                 type="monotone"
                 stroke={DEEPSEEK_BLUE}
                 strokeWidth={2}
-                dot={(props) => (
-                  <CustomDot {...props} dataLength={metricsData.length} />
-                )}
+                dot={(props) => {
+                  const { key, ...dotProps } = props;
+                  return (
+                    <CustomDot
+                      key={`dot-${dotProps.index || 0}`}
+                      {...dotProps}
+                      dataLength={metricsData.length}
+                    />
+                  );
+                }}
                 activeDot={{
                   r: 6,
                   fill: DEEPSEEK_BLUE,

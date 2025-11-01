@@ -1,4 +1,4 @@
-import { EMA, MACD, RSI, ATR } from "technicalindicators";
+import { EMA, MACD, RSI, ATR, BollingerBands, Stochastic } from "technicalindicators";
 import { binance } from "./binance";
 
 export interface MarketState {
@@ -7,6 +7,10 @@ export interface MarketState {
   current_ema20: number;
   current_macd: number;
   current_rsi: number;
+  current_bollinger_upper: number;
+  current_bollinger_lower: number;
+  current_stoch_k: number;
+  current_stoch_d: number;
 
   // Open Interest
   open_interest: {
@@ -24,6 +28,11 @@ export interface MarketState {
     macd: number[];
     rsi_7: number[];
     rsi_14: number[];
+    bollinger_upper: number[];
+    bollinger_lower: number[];
+    bollinger_middle: number[];
+    stoch_k: number[];
+    stoch_d: number[];
   };
 
   // Longer-term context (4-hour timeframe)
@@ -36,6 +45,11 @@ export interface MarketState {
     average_volume: number;
     macd: number[];
     rsi_14: number[];
+    bollinger_upper_4h: number[];
+    bollinger_lower_4h: number[];
+    bollinger_middle_4h: number[];
+    stoch_k_4h: number[];
+    stoch_d_4h: number[];
   };
 }
 
@@ -131,6 +145,22 @@ export async function getCurrentMarketState(
     const rsi7_3m = calculateRSI(closes3m, 7);
     const rsi14_3m = calculateRSI(closes3m, 14);
 
+    // Calculate Bollinger Bands (3-minute timeframe)
+    const bollingerBands3m = BollingerBands.calculate({
+      period: 20,
+      stdDev: 2,
+      values: closes3m
+    });
+
+    // Calculate Stochastic (3-minute timeframe)
+    const stochastic3m = Stochastic.calculate({
+      high: ohlcv3m.map(candle => Number(candle[2])),
+      low: ohlcv3m.map(candle => Number(candle[3])),
+      close: closes3m,
+      period: 14,
+      signalPeriod: 3
+    });
+
     // Calculate longer-term indicators (4-hour timeframe)
     const ema20_4h = calculateEMA(closes4h, 20);
     const ema50_4h = calculateEMA(closes4h, 50);
@@ -138,6 +168,22 @@ export async function getCurrentMarketState(
     const atr14_4h = calculateATR(highs4h, lows4h, closes4h, 14);
     const macd_4h = calculateMACD(closes4h);
     const rsi14_4h = calculateRSI(closes4h, 14);
+
+    // Calculate Bollinger Bands (4-hour timeframe)
+    const bollingerBands4h = BollingerBands.calculate({
+      period: 20,
+      stdDev: 2,
+      values: closes4h
+    });
+
+    // Calculate Stochastic (4-hour timeframe)
+    const stochastic4h = Stochastic.calculate({
+      high: highs4h,
+      low: lows4h,
+      close: closes4h,
+      period: 14,
+      signalPeriod: 3
+    });
 
     // Get last 10 values for intraday series
     const last10MidPrices = closes3m.slice(-10);
@@ -155,6 +201,14 @@ export async function getCurrentMarketState(
     const current_ema20 = Number(ema20_3m[ema20_3m.length - 1]) || 0;
     const current_macd = Number(macd_3m[macd_3m.length - 1]) || 0;
     const current_rsi = Number(rsi7_3m[rsi7_3m.length - 1]) || 0;
+
+    // Bollinger Bands current values
+    const current_bollinger_upper = Number(bollingerBands3m[bollingerBands3m.length - 1]?.upper) || 0;
+    const current_bollinger_lower = Number(bollingerBands3m[bollingerBands3m.length - 1]?.lower) || 0;
+
+    // Stochastic current values
+    const current_stoch_k = Number(stochastic3m[stochastic3m.length - 1]?.k) || 0;
+    const current_stoch_d = Number(stochastic3m[stochastic3m.length - 1]?.d) || 0;
 
     // Fetch open interest and funding rate for perpetual futures
     const openInterestData = { latest: 0, average: 0 };
@@ -185,11 +239,29 @@ export async function getCurrentMarketState(
       volumes4h.reduce((sum, vol) => sum + vol, 0) / volumes4h.length;
     const currentVolume4h = volumes4h[volumes4h.length - 1];
 
+    // Prepare intraday series for new indicators
+    const last10BollingerUpper = bollingerBands3m.slice(-10).map(b => Number(b?.upper) || 0);
+    const last10BollingerLower = bollingerBands3m.slice(-10).map(b => Number(b?.lower) || 0);
+    const last10BollingerMiddle = bollingerBands3m.slice(-10).map(b => Number(b?.middle) || 0);
+    const last10StochK = stochastic3m.slice(-10).map(s => Number(s?.k) || 0);
+    const last10StochD = stochastic3m.slice(-10).map(s => Number(s?.d) || 0);
+
+    // Prepare 4h indicators
+    const last10BollingerUpper4h = bollingerBands4h.slice(-10).map(b => Number(b?.upper) || 0);
+    const last10BollingerLower4h = bollingerBands4h.slice(-10).map(b => Number(b?.lower) || 0);
+    const last10BollingerMiddle4h = bollingerBands4h.slice(-10).map(b => Number(b?.middle) || 0);
+    const last10StochK4h = stochastic4h.slice(-10).map(s => Number(s?.k) || 0);
+    const last10StochD4h = stochastic4h.slice(-10).map(s => Number(s?.d) || 0);
+
     return {
       current_price,
       current_ema20,
       current_macd,
       current_rsi,
+      current_bollinger_upper,
+      current_bollinger_lower,
+      current_stoch_k,
+      current_stoch_d,
       open_interest: openInterestData,
       funding_rate: fundingRate,
       intraday: {
@@ -198,6 +270,11 @@ export async function getCurrentMarketState(
         macd: last10MACD,
         rsi_7: last10RSI7,
         rsi_14: last10RSI14,
+        bollinger_upper: last10BollingerUpper,
+        bollinger_lower: last10BollingerLower,
+        bollinger_middle: last10BollingerMiddle,
+        stoch_k: last10StochK,
+        stoch_d: last10StochD,
       },
       longer_term: {
         ema_20: Number(ema20_4h[ema20_4h.length - 1]) || 0,
@@ -208,6 +285,11 @@ export async function getCurrentMarketState(
         average_volume: averageVolume4h,
         macd: last10MACD4h,
         rsi_14: last10RSI14_4h,
+        bollinger_upper_4h: last10BollingerUpper4h,
+        bollinger_lower_4h: last10BollingerLower4h,
+        bollinger_middle_4h: last10BollingerMiddle4h,
+        stoch_k_4h: last10StochK4h,
+        stoch_d_4h: last10StochD4h,
       },
     };
   } catch (error) {

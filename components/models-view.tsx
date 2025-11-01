@@ -151,16 +151,17 @@ export function ModelsView() {
     };
   }, [fetchChats, fetchPositions]);
 
-  // 获取所有交易操作（买入和卖出）
-  const completedTrades = chats.flatMap((chat) =>
-    chat.tradings
-      .filter((t) =>
-        t.opeartion === "BUY_TO_ENTER" ||
-        t.opeartion === "SELL_TO_ENTER" ||
-        t.opeartion === "CLOSE"
-      )
-      .map((t) => ({ ...t, chatId: chat.id, model: chat.model }))
-  );
+  // 获取所有交易操作（数据库已过滤掉HOLD）
+  const completedTrades = chats.flatMap((chat) => {
+    const trades = chat.tradings || [];
+    console.log(`🔍 Processing chat ${chat.id} with ${trades.length} trades (already filtered by database)`);
+
+    // 数据库已经过滤掉了HOLD，直接返回所有trades
+    const processedTrades = trades.map((t) => ({ ...t, chatId: chat.id, model: chat.model }));
+
+    console.log(`🔍 Chat ${chat.id} has ${processedTrades.length} completed trades`);
+    return processedTrades;
+  });
 
   const renderOperationIcon = (operation: string) => {
     switch (operation) {
@@ -220,69 +221,73 @@ export function ModelsView() {
                 </div>
               </div>
 
-              {/* Trade details grid */}
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                {/* Price */}
-                {trade.pricing && (
-                  <div className="space-y-1">
-                    <div className="text-xs text-muted-foreground font-medium">
-                      {trade.opeartion === "BUY_TO_ENTER"
-                        ? "Entry Price"
-                        : "Exit Price"}
+              {/* Trade details - flexible layout */}
+              <div className="space-y-3 text-sm">
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Amount */}
+                  {Number(trade.amount) > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground font-medium">
+                        Amount
+                      </div>
+                      <div className="font-mono font-semibold">
+                        {trade.amount}{" "}
+                        {trade.symbol?.includes("/") ? "units" : trade.symbol}
+                      </div>
                     </div>
-                    <div className="font-mono font-bold text-base">
-                      $
-                      {trade.pricing.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Amount */}
-                {trade.amount && (
-                  <div className="space-y-1">
-                    <div className="text-xs text-muted-foreground font-medium">
-                      Amount
+                  {/* Leverage */}
+                  {trade.leverage && trade.leverage > 1 && (
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground font-medium">
+                        Leverage
+                      </div>
+                      <div className="font-mono font-semibold text-purple-600">
+                        {trade.leverage}x
+                      </div>
                     </div>
-                    <div className="font-mono font-semibold">
-                      {trade.amount}{" "}
-                      {trade.symbol?.includes("/") ? "units" : trade.symbol}
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
-                {/* Leverage */}
-                {trade.leverage && (
-                  <div className="space-y-1">
-                    <div className="text-xs text-muted-foreground font-medium">
-                      Leverage
-                    </div>
-                    <div className="font-mono font-semibold text-purple-600">
-                      {trade.leverage}x
-                    </div>
-                  </div>
-                )}
-
-                {/* Total Value */}
-                {trade.pricing && trade.amount && (
-                  <div className="space-y-1">
-                    <div className="text-xs text-muted-foreground font-medium">
-                      Total Value
-                    </div>
-                    <div className="font-mono font-bold text-base">
-                      $
-                      {(trade.pricing * trade.amount).toLocaleString(
-                        undefined,
-                        {
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Price */}
+                  {Number(trade.pricing) > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground font-medium">
+                        {trade.opeartion === "BUY_TO_ENTER"
+                          ? "Entry Price"
+                          : "Exit Price"}
+                      </div>
+                      <div className="font-mono font-bold text-base">
+                        $
+                        {(trade.pricing || 0).toLocaleString(undefined, {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
-                        }
-                      )}
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+
+                  {/* Total Value */}
+                  {Number(trade.pricing) > 0 && Number(trade.amount) > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-xs text-muted-foreground font-medium">
+                        Total Value
+                      </div>
+                      <div className="font-mono font-bold text-base">
+                        $
+                        {((trade.pricing || 0) * (trade.amount || 0)).toLocaleString(
+                          undefined,
+                          {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          }
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* Stop Loss */}
                 {trade.stopLoss && (
@@ -327,7 +332,7 @@ export function ModelsView() {
                       Confidence
                     </div>
                     <div className="font-semibold text-purple-600">
-                      {(trade.confidence * 100).toFixed(1)}%
+                      {trade.confidence?.toFixed(2)}
                     </div>
                   </div>
                 )}
@@ -458,6 +463,19 @@ export function ModelsView() {
                   </div>
                 </div>
 
+                {/* Leverage */}
+                {(position.dbTrade?.leverage || position.leverage) &&
+                 (position.dbTrade?.leverage || position.leverage) > 1 && (
+                  <div className="space-y-1">
+                    <div className="text-xs text-muted-foreground font-medium">
+                      Leverage
+                    </div>
+                    <div className="font-mono font-semibold text-purple-600">
+                      {(position.dbTrade?.leverage || position.leverage)}x
+                    </div>
+                  </div>
+                )}
+
                 {/* Liquidation Price */}
                 {position.liquidationPrice && (
                   <div className="space-y-1">
@@ -519,7 +537,7 @@ export function ModelsView() {
                           Confidence
                         </div>
                         <div className="font-semibold text-purple-600">
-                          {(position.dbTrade.confidence * 100).toFixed(1)}%
+                          {position.dbTrade.confidence?.toFixed(2)}
                         </div>
                       </div>
                     )}
@@ -655,7 +673,14 @@ export function ModelsView() {
                         Trading Decisions
                       </div>
                       <div className="space-y-2">
-                        {decisions.map((decision, idx) => (
+                        {decisions.filter(decision => {
+  // 如果是HOLD操作，检查是否有该币种的持仓
+  if (decision.opeartion === "HOLD") {
+    return positions.some(pos => pos.symbol === decision.symbol);
+  }
+  // 非HOLD操作都显示
+  return true;
+}).map((decision, idx) => (
                           <div
                             key={idx}
                             className={`rounded-lg p-3 border-l-4 ${

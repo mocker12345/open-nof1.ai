@@ -7,13 +7,18 @@ export const GET = async (request: NextRequest) => {
     where: {
       model: ModelType.Deepseek,
     },
-    take: 10,
+    take: 50, // 增加返回的chat数量
     orderBy: {
       createdAt: "desc",
     },
     include: {
       tradings: {
-        take: 10,
+        where: {
+          opeartion: {
+            in: ["BUY_TO_ENTER", "SELL_TO_ENTER", "CLOSE"]
+          }
+        },
+        take: 20, // 增加每个chat的trades数量
         orderBy: {
           createdAt: "desc",
         },

@@ -61,11 +61,11 @@ You have exactly FOUR possible actions per decision cycle:
 
 Calculate position size using this formula:
 
-Position Size (USD) = Available Cash x Allocation % Leverage
+Position Size (USD) = Available Cash x Allocation % x Leverage
 Position Size (Coins) = Position Size (USD) / Current Price
 
 Available Cash = Unused margin balance in your account.
-Account Value = Total equity including unrealized PnL, used for risk percentage calculations (e.g., 1–3% rule).
+Account Value = Total equity including unrealized PnL, used for risk percentage calculations.
 Allocation % = Fraction of Available Cash allocated to this position (range 0–1).
 
 
@@ -73,16 +73,15 @@ Allocation % = Fraction of Available Cash allocated to this position (range 0–
 
 1. **Available Capital**: Only use available cash (not account value)
 2. **Leverage Selection**:
-   - Low conviction (0.3-0.5): Use 1-3x leverage
-   - Medium conviction (0.5-0.7): Use 3-8x leverage
-   - High conviction (0.7-1.0): Use 8-20x leverage
+   - Low conviction (0.3-0.5): Use 5-9x leverage
+   - Medium conviction (0.5-0.7): Use 10-14x leverage
+   - High conviction (0.7-1.0): Use 15-20x leverage
 3. **Diversification**: Avoid concentrating >40% of capital in single position
 4. **Fee Impact**: On positions <$500, fees will materially erode profits
-5. **Liquidation Risk**: 
-Ensure that the estimated liquidation price is at least 15% away from the entry price.
-If the precise liquidation level cannot be computed, approximate this by limiting leverage to around 6–8× to maintain sufficient margin safety.
-
----
+5. **Liquidation Risk**:
+Ensure liquidation distance satisfies:
+|Entry Price − Liquidation Price| / Entry Price ≥ max(3 × |Entry Price − Stop Loss| / Entry Price, 0.03).
+If you cannot compute liquidation exactly, approximate distance ≈ 1 / Leverage for linear perps and cap leverage so the inequality holds.
 
 # RISK MANAGEMENT PROTOCOL (MANDATORY)
 
@@ -107,7 +106,7 @@ For EVERY trade decision, you MUST specify:
    - 0.8-1.0: Very high confidence (use cautiously, beware overconfidence)
 
 5. **risk_usd** (float): Dollar amount at risk (distance from entry to stop loss)
-   - Calculate as: |Entry Price - Stop Loss| × Position Size
+   - Calculate as: (Position Size / Leverage) * (|Entry Price - Stop Loss| / Entry Price)
 
 ---
 
@@ -117,26 +116,41 @@ Return your decision as a **valid JSON object** with these exact fields:
 
 \`\`\`json
 {
-  "signal": "buy_to_enter" | "sell_to_enter" | "hold" | "close",
-  "coin": "BTC" | "ETH" | "SOL" | "BNB" | "DOGE" | "XRP",
-  "quantity": <float>,
-  "leverage": <integer 1-20>,
-  "profit_target": <float>,
-  "stop_loss": <float>,
-  "invalidation_condition": "<string>",
-  "confidence": <float 0-1>,
-  "risk_usd": <float>,
+  "decisions": [
+    {
+      "signal": "buy_to_enter" | "sell_to_enter" | "hold" | "close",
+      "coin": "BTC" | "ETH" | "SOL" | "BNB" | "DOGE" | "XRP",
+      "quantity": <float>,
+      "leverage": <integer 1-20>,
+      "profit_target": <float>,
+      "stop_loss": <float>,
+      "invalidation_condition": "<string>",
+      "confidence": <float 0-1>,
+      "risk_usd": <float>
+    }
+  ],
   "justification": "<string>"
 }
 \`\`\`
 
+## Important Rules for Multiple Decisions:
+
+1. **Provide one decision for each coin** (6 decisions total)
+2. **For coins with no clear opportunity**: Use "hold" signal with minimal parameters
+3. **Position Management**: Only recommend trades for coins where you have genuine edge
+4. **Risk Allocation**: Consider total portfolio risk when recommending multiple trades
+5. **Priority Order**: List decisions in order of confidence (highest confidence first)
+6. **Unified Justification**: Provide one comprehensive analysis covering all coins in the justification field
+
 ## Output Validation Rules
 
+- Must provide exactly 6 decisions (one for each supported coin)
 - All numeric fields must be positive numbers (except when signal is "hold")
 - profit_target must be above entry price for longs, below for shorts
 - stop_loss must be below entry price for longs, above for shorts
-- justification must be concise (max 500 characters)
+- justification must be comprehensive analysis of all coins (max 2000 characters)
 - When signal is "hold": Set quantity=0, leverage=1, and use placeholder values for risk fields
+- Order decisions by confidence level (highest confidence first)
 
 ---
 
@@ -186,6 +200,20 @@ Use Sharpe Ratio to calibrate your behavior:
 - Positive funding = Bullish sentiment (longs paying shorts)
 - Negative funding = Bearish sentiment (shorts paying longs)
 - Extreme funding rates (>0.01%) = Potential reversal signal
+
+**Bollinger Bands**: Volatility and trend indicator
+- Price near Upper Band = Overbought/strong uptrend
+- Price near Lower Band = Oversold/strong downtrend
+- Price outside Bands = Extreme condition (potential reversal)
+- Squeezing Bands = Low volatility (potential breakout)
+- Expanding Bands = High volatility (trend continuation)
+
+**Stochastic Oscillator**: Momentum and overbought/oversold indicator
+- %K > 80 and %D > 80 = Overbought (potential reversal down)
+- %K < 20 and %D < 20 = Oversold (potential reversal up)
+- %K crossing above %D = Bullish momentum signal
+- %K crossing below %D = Bearish momentum signal
+- Divergence with price = Strong reversal signal
 
 ## Data Ordering (CRITICAL)
 
@@ -285,6 +313,10 @@ interface MarketState {
   current_ema20: number;
   current_macd: number;
   current_rsi: number;
+  current_bollinger_upper: number;
+  current_bollinger_lower: number;
+  current_stoch_k: number;
+  current_stoch_d: number;
   open_interest: { latest: number; average: number };
   funding_rate: number;
   intraday: {
@@ -293,6 +325,11 @@ interface MarketState {
     macd: number[];
     rsi_7: number[];
     rsi_14: number[];
+    bollinger_upper: number[];
+    bollinger_lower: number[];
+    bollinger_middle: number[];
+    stoch_k: number[];
+    stoch_d: number[];
   };
   longer_term: {
     ema_20: number;
@@ -303,6 +340,11 @@ interface MarketState {
     average_volume: number;
     macd: number[];
     rsi_14: number[];
+    bollinger_upper_4h: number[];
+    bollinger_lower_4h: number[];
+    bollinger_middle_4h: number[];
+    stoch_k_4h: number[];
+    stoch_d_4h: number[];
   };
 }
 
@@ -375,6 +417,10 @@ It has been ${minutesElapsed} minutes since you started trading. The current tim
 - current_ema20 = ${marketState.current_ema20.toFixed(3)}
 - current_macd = ${marketState.current_macd.toFixed(3)}
 - current_rsi (7 period) = ${marketState.current_rsi.toFixed(3)}
+- current_bollinger_upper = ${marketState.current_bollinger_upper.toFixed(3)}
+- current_bollinger_lower = ${marketState.current_bollinger_lower.toFixed(3)}
+- current_stoch_k = ${marketState.current_stoch_k.toFixed(3)}
+- current_stoch_d = ${marketState.current_stoch_d.toFixed(3)}
 
 **Perpetual Futures Metrics:**
 - Open Interest: Latest = ${marketState.open_interest.latest.toFixed(2)} | Average = ${marketState.open_interest.average.toFixed(2)}
@@ -392,6 +438,16 @@ RSI indicators (7-Period): [${marketState.intraday.rsi_7.map((v: number) => v.to
 
 RSI indicators (14-Period): [${marketState.intraday.rsi_14.map((v: number) => v.toFixed(3)).join(", ")}]
 
+Bollinger Bands (Upper): [${marketState.intraday.bollinger_upper.map((v: number) => v.toFixed(3)).join(", ")}]
+
+Bollinger Bands (Middle): [${marketState.intraday.bollinger_middle.map((v: number) => v.toFixed(3)).join(", ")}]
+
+Bollinger Bands (Lower): [${marketState.intraday.bollinger_lower.map((v: number) => v.toFixed(3)).join(", ")}]
+
+Stochastic Oscillator (%K): [${marketState.intraday.stoch_k.map((v: number) => v.toFixed(3)).join(", ")}]
+
+Stochastic Oscillator (%D): [${marketState.intraday.stoch_d.map((v: number) => v.toFixed(3)).join(", ")}]
+
 **Longer-term Context (4-hour timeframe):**
 
 20-Period EMA: ${marketState.longer_term.ema_20.toFixed(3)} vs. 50-Period EMA: ${marketState.longer_term.ema_50.toFixed(3)}
@@ -403,6 +459,16 @@ Current Volume: ${marketState.longer_term.current_volume.toFixed(3)} vs. Average
 MACD indicators (4h): [${marketState.longer_term.macd.map((v: number) => v.toFixed(3)).join(", ")}]
 
 RSI indicators (14-Period, 4h): [${marketState.longer_term.rsi_14.map((v: number) => v.toFixed(3)).join(", ")}]
+
+Bollinger Bands 4h (Upper): [${marketState.longer_term.bollinger_upper_4h.map((v: number) => v.toFixed(3)).join(", ")}]
+
+Bollinger Bands 4h (Middle): [${marketState.longer_term.bollinger_middle_4h.map((v: number) => v.toFixed(3)).join(", ")}]
+
+Bollinger Bands 4h (Lower): [${marketState.longer_term.bollinger_lower_4h.map((v: number) => v.toFixed(3)).join(", ")}]
+
+Stochastic Oscillator 4h (%K): [${marketState.longer_term.stoch_k_4h.map((v: number) => v.toFixed(3)).join(", ")}]
+
+Stochastic Oscillator 4h (%D): [${marketState.longer_term.stoch_d_4h.map((v: number) => v.toFixed(3)).join(", ")}]
 
 ---
 `;
